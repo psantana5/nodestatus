@@ -22,7 +22,7 @@ LoadMetrics getLoadAverage() {
 }
 
 MemoryMetrics getMemoryMetrics() {
-    MemoryMetrics metrics = {0, 0, 0};
+    MemoryMetrics metrics = {0, 0, 0, 0, 0}; 
     FILE *fp = fopen("/proc/meminfo", "r");
     
     if (fp == NULL) {
@@ -47,6 +47,30 @@ MemoryMetrics getMemoryMetrics() {
      // We will calculate memUsed and memUsedPercent after we have read the total and free memory values
     metrics.memUsed = metrics.MemTotal - metrics.MemFree;
     metrics.memUsedPercent = (metrics.MemTotal > 0) ? ((float)metrics.memUsed / metrics.MemTotal) * 100 : 0;
+    
+    fclose(fp);
+    return metrics;
+}
+
+CpuMetrics getCpuMetrics() {
+    CpuMetrics metrics = {0, 0, 0, 0, 0, 0, 0.0f};
+    FILE *fp = fopen("/proc/stat", "r");
+    
+    if (fp == NULL) {
+        perror("fopen");
+        return metrics;
+    }
+    
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        if (sscanf(line, "cpu %llu %llu %llu %llu %llu", &metrics.user, &metrics.nice, &metrics.system, &metrics.idle, &metrics.iowait) == 5) {
+            break;
+        }
+    }
+
+    unsigned long long total = metrics.user + metrics.nice + metrics.system + metrics.idle + metrics.iowait;
+    metrics.busy = (total > 0) ? (total - metrics.idle - metrics.iowait) : 0;
+    metrics.busyPercent = (total > 0) ? ((float)metrics.busy / (float)total) * 100.0f : 0.0f;
     
     fclose(fp);
     return metrics;

@@ -79,7 +79,8 @@ int socketServer(){
         if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
             LoadMetrics metrics = getLoadAverage(); // Get the system load average metrics
             MemoryMetrics memMetrics = getMemoryMetrics(); // Get the memory metrics
-            buildJsonResponse(body, sizeof(body), metrics, memMetrics); // Build a JSON response string containing the metrics, which will be sent back to the client
+            CpuMetrics cpuMetrics = getCpuMetrics(); // Get the CPU usage metrics
+            buildJsonResponse(body, sizeof(body), metrics, memMetrics, cpuMetrics); // Build a JSON response string containing the metrics, which will be sent back to the client
             sendHttpResponse(client_socket, body, "application/json"); // Send the HTTP response with the JSON body and the appropriate content type header
         } else {
             sendHttpResponse(client_socket, "404 Not Found", "text/plain");

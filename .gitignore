@@ -1,4 +1,4 @@
 bin/
 agent/agent
 *.o
-revert*
+docs/

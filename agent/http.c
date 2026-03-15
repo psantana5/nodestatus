@@ -29,10 +29,24 @@ char* parseRequestPath(const char *request) {
     return path;
 }
 
-int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, MemoryMetrics memMetrics) {
+int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, MemoryMetrics memMetrics, CpuMetrics cpuMetrics) {
     return snprintf(buffer, buffer_size,
-        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f}",
-        metrics.load1, metrics.load5, metrics.load15, memMetrics.MemTotal, memMetrics.MemFree, memMetrics.MemAvailable, memMetrics.memUsed, memMetrics.memUsedPercent);
+        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f}",
+        metrics.load1,
+        metrics.load5,
+        metrics.load15,
+        memMetrics.MemTotal,
+        memMetrics.MemFree,
+        memMetrics.MemAvailable,
+        memMetrics.memUsed,
+        memMetrics.memUsedPercent,
+        cpuMetrics.user,
+        cpuMetrics.nice,
+        cpuMetrics.system,
+        cpuMetrics.idle,
+        cpuMetrics.iowait,
+        cpuMetrics.busy,
+        cpuMetrics.busyPercent);
 }
 
 void sendHttpResponse(int client_socket, const char *body, const char *content_type) {
