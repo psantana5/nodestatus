@@ -17,6 +17,7 @@
 // Simple HTTP server to handle requests and return system metrics
 // Listens on port 9002 and responds to /status with JSON metrics
 // For simplicity, this server handles one request at a time and does not implement concurrency
+
 int socketServer(){
     int server_socket;
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -77,7 +78,8 @@ int socketServer(){
         char body[512]; // Buffer to hold the response body, which will contain the JSON metrics if the request is for /status
         if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
             LoadMetrics metrics = getLoadAverage(); // Get the system load average metrics
-            buildJsonResponse(body, sizeof(body), metrics); // Build a JSON response string containing the metrics, which will be sent back to the client
+            MemoryMetrics memMetrics = getMemoryMetrics(); // Get the memory metrics
+            buildJsonResponse(body, sizeof(body), metrics, memMetrics); // Build a JSON response string containing the metrics, which will be sent back to the client
             sendHttpResponse(client_socket, body, "application/json"); // Send the HTTP response with the JSON body and the appropriate content type header
         } else {
             sendHttpResponse(client_socket, "404 Not Found", "text/plain");
