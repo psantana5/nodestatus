@@ -29,10 +29,10 @@ char* parseRequestPath(const char *request) {
     return path;
 }
 
-int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics) {
+int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, MemoryMetrics memMetrics) {
     return snprintf(buffer, buffer_size,
-        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f}",
-        metrics.load1, metrics.load5, metrics.load15);
+        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f}",
+        metrics.load1, metrics.load5, metrics.load15, memMetrics.MemTotal, memMetrics.MemFree, memMetrics.MemAvailable, memMetrics.memUsed, memMetrics.memUsedPercent);
 }
 
 void sendHttpResponse(int client_socket, const char *body, const char *content_type) {
