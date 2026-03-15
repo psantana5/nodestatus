@@ -1,37 +1,41 @@
-// Author: Pau Santana
-// Date: 2026-03-15
-// Latest revision: 2026-03-15
-
-
-// Functions of this file are:
-// 1. Read nodes from the config/nodes.txt file
-// 2. Loop over the nodes
-// 3. For each node, get the metrics
-// 4. Send the results to the table.c file
-// 5. Print the table.
-
 #include <stdio.h>
+#include <string.h>
 #include "nodes.h"
-#include "table.h"
 
-int main(int argc, char *argv[]) {
-    const char *nodes_file = (argc > 1) ? argv[1] : "config/nodes.txt";
-
+int main()
+{
     Node nodes[MAX_NODES];
-    int node_count = loadNodes(nodes_file, nodes, MAX_NODES);
-    
-    if (node_count < 0) {
-        fprintf(stderr, "Failed to load nodes from %s\n", nodes_file);
+
+    int nodeCount = loadNodes("config/nodes.txt", nodes, MAX_NODES);
+
+    if (nodeCount == 0) {
+        printf("No nodes found\n");
         return 1;
     }
 
-    printf("Loaded %d nodes:\n", node_count);
-    for (int i = 0; i < node_count; i++) {
-        printf("%s\n", nodes[i].hostname);
-    }
+    printf("Loaded %d nodes\n\n", nodeCount);
 
-    // Here we would loop over the nodes and get the metrics for each node
-    // For simplicity, we will just print the hostnames for now
+    for (int i = 0; i < nodeCount; i++) {
+        printf("Querying %s\n", nodes[i].hostname);
+
+        char response[2048];
+        int bytes = fetchStatus(nodes[i].hostname, response, sizeof(response));
+
+        if (bytes > 0) {
+            // Parse HTTP response to extract JSON body
+            // Format: headers\r\n\r\nJSON_body
+            char *json_start = strstr(response, "\r\n\r\n");
+            if (json_start) {
+                printf("Status: %s\n", json_start + 4);
+            } else {
+                printf("Response: %s\n", response);
+            }
+        } else {
+            printf("Failed to fetch status\n");
+        }
+
+        printf("\n");
+    }
 
     return 0;
 }

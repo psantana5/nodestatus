@@ -10,5 +10,6 @@ typedef struct {
 } Node;
 
 int loadNodes(const char *filename, Node *nodes, int max_nodes);
+int fetchStatus(const char *hostname, char *response, int response_size);
 
 #endif // NODES_H
