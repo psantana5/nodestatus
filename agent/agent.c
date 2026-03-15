@@ -10,7 +10,7 @@
 // Author: Pau Santana
 // Date: 2026-03-15
 // Latest revision: 2026-03-15
-// Current version: 0.5
+// Current version for agent.c: 1.0
 
 // If you are reading this, peace and love to you <3
 
