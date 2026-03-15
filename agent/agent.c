@@ -76,7 +76,11 @@ int socketServer(){
         }
 
         char body[512]; // Buffer to hold the response body, which will contain the JSON metrics if the request is for /status
-        if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
+        
+        if (path && strcmp(path, "/health") == 0) { // If the requested path is /health, we can return a simple response indicating that the server is running. This can be used for health checks by monitoring systems.
+            sendHttpResponse(client_socket, "OK", "text/plain");
+        }
+        else if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
             LoadMetrics metrics = getLoadAverage(); // Get the system load average metrics
             MemoryMetrics memMetrics = getMemoryMetrics(); // Get the memory metrics
             CpuMetrics cpuMetrics = getCpuMetrics(); // Get the CPU usage metrics
@@ -85,8 +89,8 @@ int socketServer(){
         } else {
             sendHttpResponse(client_socket, "404 Not Found", "text/plain");
         }
-
         close(client_socket);
+        
     }
 
     close(server_socket);
