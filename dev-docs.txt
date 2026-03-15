@@ -1,0 +1,176 @@
+================================================================================
+NODESTATUS - DEVELOPMENT GUIDE
+Adding New Metrics
+================================================================================
+
+This guide explains how to add new system metrics to the nodestatus agent.
+The agent currently collects load average and memory metrics from /proc.
+
+================================================================================
+PROCESS: Adding a New Metric (4 Steps)
+================================================================================
+
+STEP 1: Define the struct in metrics.h
+--------
+
+Add a new typedef struct to hold the metric values.
+
+Example for CPU metrics:
+    typedef struct {
+        unsigned long user;
+        unsigned long system;
+        unsigned long idle;
+        float usage_percent;
+    } CPUMetrics;
+
+Also add the function signature:
+    CPUMetrics getCPUMetrics();
+
+Rules:
+- Use unsigned long for values from /proc (they are in kB or jiffies)
+- Use float for calculated percentages
+- Always zero-initialize: struct_name metrics = {0};
+- Add error checking with perror() if file operations fail
+
+
+STEP 2: Implement the getter function in metrics.c
+--------
+
+Follow this pattern:
+
+    MetricType getMetricName() {
+        MetricType metrics = {0};  // Initialize to zero
+        FILE *fp = fopen("/proc/path/to/file", "r");
+        
+        if (fp == NULL) {
+            perror("fopen");
+            return metrics;
+        }
+        
+        char line[256];
+        while (fgets(line, sizeof(line), fp)) {
+            // Parse each line with sscanf()
+            if (sscanf(line, "FieldName: %lu", &metrics.field1) == 1) {
+                continue;
+            }
+            if (sscanf(line, "OtherField: %lu", &metrics.field2) == 1) {
+                continue;
+            }
+        }
+        
+        // Calculate derived values AFTER parsing
+        metrics.percent = (metrics.field1 > 0) ? 
+            ((float)metrics.field2 / metrics.field1) * 100 : 0;
+        
+        fclose(fp);
+        return metrics;
+    }
+
+Key points:
+- Parse /proc files line-by-line with fgets()
+- Use sscanf() to extract values with proper format specifiers
+- Calculate percentages/derived values AFTER reading from file
+- Always check if divisor > 0 to avoid division by zero
+- Close file before returning
+
+
+STEP 3: Update JSON builder in http.c
+--------
+
+Modify buildJsonResponse() to accept the new metric struct:
+
+    int buildJsonResponse(char *buffer, int buffer_size, 
+                          LoadMetrics metrics, 
+                          MemoryMetrics memMetrics,
+                          CPUMetrics cpuMetrics) {  // <- add new param
+        
+        return snprintf(buffer, buffer_size,
+            "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,"
+            "\"memTotal\":%lu,\"memFree\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,"
+            "\"cpuUser\":%lu,\"cpuSystem\":%lu,\"cpuUsage\":%.2f}",  // <- add new fields
+            
+            metrics.load1, metrics.load5, metrics.load15,
+            memMetrics.MemTotal, memMetrics.MemFree, memMetrics.memUsed, memMetrics.memUsedPercent,
+            cpuMetrics.user, cpuMetrics.system, cpuMetrics.usage_percent);  // <- add values
+    }
+
+Rules for JSON format strings:
+- Use %.2f for float percentages
+- Use %lu for unsigned long values
+- Match each format specifier with corresponding value
+- JSON key names should be descriptive but concise
+
+
+STEP 4: Update http.h and agent.c
+--------
+
+Update http.h function signature to match:
+    int buildJsonResponse(char *buffer, int buffer_size, 
+                          LoadMetrics metrics, 
+                          MemoryMetrics memMetrics,
+                          CPUMetrics cpuMetrics);
+
+In agent.c, in the /status endpoint handler:
+    LoadMetrics metrics = getLoadAverage();
+    MemoryMetrics memMetrics = getMemoryMetrics();
+    CPUMetrics cpuMetrics = getCPUMetrics();  // <- add this
+    buildJsonResponse(body, sizeof(body), metrics, memMetrics, cpuMetrics);  // <- pass all
+
+
+================================================================================
+COMMON /PROC FILES FOR METRICS
+================================================================================
+
+/proc/loadavg
+    Format: 1min_load 5min_load 15min_load running_tasks total_tasks last_pid
+    Used for: Load average
+
+/proc/meminfo
+    Format: FieldName: value kB
+    Used for: Memory usage (MemTotal, MemFree, MemAvailable, etc.)
+
+/proc/stat
+    Format: cpu user nice system idle iowait irq softirq steal guest guest_nice
+    Used for: CPU usage, IO wait
+
+/proc/diskstats
+    Format: major_num minor_num device_name reads_completed ... writes_completed ...
+    Used for: Disk IO metrics
+
+/proc/net/dev
+    Format: Interface: receive_bytes receive_packets ... transmit_bytes ...
+    Used for: Network metrics
+
+
+================================================================================
+TESTING YOUR CHANGES
+================================================================================
+
+1. Compile:
+    make clean && make
+
+2. Run the agent:
+    ./bin/nodestatus-agent &
+
+3. Test the endpoint:
+    curl http://localhost:9002/status
+
+4. Verify JSON output contains your new metric fields
+
+5. Stop the agent when done
+
+
+================================================================================
+CONSTRAINTS TO REMEMBER
+================================================================================
+
+- No external libraries (only POSIX C)
+- Use snprintf() not sprintf() (buffer overflow protection)
+- Always null-terminate strings after read()
+- Initialize structs with {0} to avoid garbage values
+- Add perror() for all system call failures
+- Keep code simple and readable
+- Minimize memory allocations
+- Parse /proc directly, no shell commands
+
+================================================================================
