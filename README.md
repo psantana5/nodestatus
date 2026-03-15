@@ -1,0 +1,86 @@
+# Nodestatus project
+
+## Project idea
+ A simple and lightweight tool to obtain hardware metrics from groups of nodes.
+
+## Quick architecture description
+
+- CLI tool gets system status from every node via an HTTP endpoint exposed by the agent.
+- Node Agent reads system data directly from standard Linux-kernel interfaces. (`/sys`, `/proc`).
+
+                    +------------------------+
+                    |      User / Admin      |
+                    |  (run `nodectl status`)|
+                    +-----------+------------+
+                                |
+                                | CLI-command
+                                v
+                        +-------+--------+
+                        |    CLI-tool    |
+                        |   `nodectl`    |
+                        +-------+--------+
+                                |
+                                | HTTP GET /status
+                                | (parallel requests)
+        ---------------------------------------------------------------
+        |                          Nodes                               |
+        |                                                              |
+        |   +-------------------+    +-------------------+             |
+        |   |    Node Agent     |    |    Node Agent     |   ...       |
+        |   |  (port 9002)      |    |  (port 9002)      |             |
+        |   |  /status endpoint |    |  /status endpoint |             |
+        |   +---------+---------+    +---------+---------+             |
+        |             |                       |                         |
+        |   reads from|                       |reads from               |
+        |   /proc, /sys                      /proc, /sys                |
+        ---------------------------------------------------------------
+
+---
+## Agent's responsibilites
+The agent takes care of:
+- Listening in port `9002`.
+- Managing the `/status` endpoint where metrics are exposed.
+- Reading and parsing system metrics from the standard Linux interfaces.
+- Returning the JSON with the metrics.
+
+## CLI tool responsibilities
+The CLI tool takes care of:
+- Reading the list of nodes.
+- Send parallel requests to the agent's HTTP endpoint.
+- Obtain the results.
+- Show the table.
+
+For example, the command `nodectl status` will output a table like this one:
+
+| HOST   | CPU | MEM | LOAD |
+| ------ | --- | --- | ---- |
+| node01 | 23% | 14% | 0.3  |
+| node02 | 87% | 84% | 4.1  |
+| node03 | 12% | 35% | 0.2  |
+
+---
+
+## Metrics (v1)
+The metrics that will be gathered in the first version will be:
+- Load Average
+- CPU Usage
+- Memory Usage
+- I/O wait
+
+Interfaces used for this metrics will be:
+
+`/proc/stat`, `/proc/meminfo`, `/proc/loadavg` and `/proc/diskstats`
+
+## API (v1)
+
+The endpoint used for metrics will be `/status` and it will return a JSON string that contains all the metrics.
+
+---
+
+## Project constraints
+This project will try to follow a series of constraints/rules:
+- No external libraries.
+- Written in C.
+- Minimal memory usage.
+- Simple code where possible.
+- A special focus on quick oversight.
