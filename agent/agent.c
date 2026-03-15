@@ -16,7 +16,7 @@
 
 // Simple HTTP server to handle requests and return system metrics
 // Listens on port 9002 and responds to /status with JSON metrics
-// For simplicity (since we are just on v1), this server handles one request at a time and does not implement concurrency
+// For simplicity, this server handles one request at a time and does not implement concurrency
 int socketServer(){
     int server_socket;
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
