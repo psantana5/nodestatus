@@ -9,4 +9,14 @@ typedef struct {
 
 LoadMetrics getLoadAverage();
 
+typedef struct {
+    unsigned long MemTotal;
+    unsigned long MemFree;
+    unsigned long MemAvailable;
+    unsigned long memUsed;
+    float memUsedPercent;
+} MemoryMetrics;
+
+MemoryMetrics getMemoryMetrics();
+
 #endif
