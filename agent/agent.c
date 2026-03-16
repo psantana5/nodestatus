@@ -75,7 +75,7 @@ int socketServer(){
             printf("Request: %s\n", path); // Log the requested path for debugging purposes. This can help us verify that the server is correctly parsing incoming requests and can be useful for troubleshooting issues with client requests.
         }
 
-        char body[512]; // Buffer to hold the response body, which will contain the JSON metrics if the request is for /status
+        char body[2048]; // Buffer to hold the response body, which will contain the JSON metrics if the request is for /status
         
         if (path && strcmp(path, "/health") == 0) { // If the requested path is /health, we can return a simple response indicating that the server is running. This can be used for health checks by monitoring systems.
             sendHttpResponse(client_socket, "OK", "text/plain");
@@ -84,7 +84,8 @@ int socketServer(){
             LoadMetrics metrics = getLoadAverage(); // Get the system load average metrics
             MemoryMetrics memMetrics = getMemoryMetrics(); // Get the memory metrics
             CpuMetrics cpuMetrics = getCpuMetrics(); // Get the CPU usage metrics
-            buildJsonResponse(body, sizeof(body), metrics, memMetrics, cpuMetrics); // Build a JSON response string containing the metrics, which will be sent back to the client
+            DiskMetrics diskMetrics = getDiskMetrics(); // Get disk throughput metrics
+            buildJsonResponse(body, sizeof(body), metrics, memMetrics, cpuMetrics, diskMetrics); // Build a JSON response string containing the metrics, which will be sent back to the client
             sendHttpResponse(client_socket, body, "application/json"); // Send the HTTP response with the JSON body and the appropriate content type header
         } else {
             sendHttpResponse(client_socket, "404 Not Found", "text/plain");

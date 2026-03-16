@@ -29,6 +29,7 @@ static void query_node(const Node *node, NodeStatus *status) {
     status->cpu_percent = 0.0f;
     status->mem_percent = 0.0f;
     status->load = 0.0f;
+    status->disk_mb_s = 0.0f;
 
     FetchResult fetch_result = fetchStatus(node->hostname, NODE_TIMEOUT_SECONDS);
     status->state = fetch_result.state;

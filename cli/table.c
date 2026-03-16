@@ -24,27 +24,29 @@ static const char *fetch_state_to_string(FetchState state) {
 }
 
 void printTableHeader() {
-    printf("%-20s %-11s %-8s %-8s %-8s\n", "HOST", "STATE", "CPU", "MEM", "LOAD");
-    printf("----------------------------------------------------------------\n");
+    printf("%-20s %-11s %-8s %-8s %-8s %-8s\n", "HOST", "STATE", "CPU", "MEM", "LOAD", "DISK");
+    printf("-------------------------------------------------------------------------\n");
 }
 
 void printTableRow(const NodeStatus *status) {
     if (status->has_metrics) {
         printf(
-            "%-20s %-11s %6.1f%% %6.1f%% %7.2f\n",
+            "%-20s %-11s %6.1f%% %6.1f%% %7.2f %7.2f\n",
             status->hostname,
             fetch_state_to_string(status->state),
             status->cpu_percent,
             status->mem_percent,
-            status->load
+            status->load,
+            status->disk_mb_s
         );
         return;
     }
 
     printf(
-        "%-20s %-11s %-8s %-8s %-8s\n",
+        "%-20s %-11s %-8s %-8s %-8s %-8s\n",
         status->hostname,
         fetch_state_to_string(status->state),
+        "N/A",
         "N/A",
         "N/A",
         "N/A"
@@ -52,7 +54,7 @@ void printTableRow(const NodeStatus *status) {
 }
 
 void printTableFooter(int ok_count, int fail_count) {
-    printf("----------------------------------------------------------------\n");
+    printf("-------------------------------------------------------------------------\n");
     printf("OK: %d  Failed: %d\n\n", ok_count, fail_count);
 }
 
@@ -64,6 +66,7 @@ int parseJsonMetrics(const char *json, NodeStatus *status) {
     status->cpu_percent = 0.0f;
     status->mem_percent = 0.0f;
     status->load = 0.0f;
+    status->disk_mb_s = 0.0f;
 
     int matches = 0;
 
@@ -87,6 +90,13 @@ int parseJsonMetrics(const char *json, NodeStatus *status) {
             matches++;
         }
     }
-    
-    return (matches == 3) ? 0 : -1;
+
+    const char *disk_ptr = strstr(json, "\"diskTotalMBps\":");
+    if (disk_ptr) {
+        if (sscanf(disk_ptr, "\"diskTotalMBps\":%f", &status->disk_mb_s) == 1) {
+            matches++;
+        }
+    }
+
+    return (matches == 4) ? 0 : -1;
 }

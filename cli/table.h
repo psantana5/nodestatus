@@ -10,6 +10,7 @@ typedef struct {
     float load;
     float cpu_percent;
     float mem_percent;
+    float disk_mb_s;
 } NodeStatus;
 
 void printTableHeader();

@@ -29,9 +29,9 @@ char* parseRequestPath(const char *request) {
     return path;
 }
 
-int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, MemoryMetrics memMetrics, CpuMetrics cpuMetrics) {
+int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, MemoryMetrics memMetrics, CpuMetrics cpuMetrics, DiskMetrics diskMetrics) {
     return snprintf(buffer, buffer_size,
-        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f}",
+        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f,\"diskReadMBps\":%.2f,\"diskWriteMBps\":%.2f,\"diskTotalMBps\":%.2f}",
         metrics.load1,
         metrics.load5,
         metrics.load15,
@@ -46,11 +46,14 @@ int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, Memory
         cpuMetrics.idle,
         cpuMetrics.iowait,
         cpuMetrics.busy,
-        cpuMetrics.busyPercent);
+        cpuMetrics.busyPercent,
+        diskMetrics.readMBps,
+        diskMetrics.writeMBps,
+        diskMetrics.totalMBps);
 }
 
 void sendHttpResponse(int client_socket, const char *body, const char *content_type) {
-    char response[1024];
+    char response[4096];
     int response_len = snprintf(response, sizeof(response),
         "HTTP/1.0 200 OK\r\n"
         "Content-Type: %s\r\n"

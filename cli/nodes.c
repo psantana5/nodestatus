@@ -127,20 +127,43 @@ FetchResult fetchStatus(const char *hostname, int timeout_seconds) {
             continue;
         }
 
-        int bytes_received = recv(sockfd, result.response, RESPONSE_BUFFER_SIZE - 1, 0);
-        if (bytes_received < 0) {
-            last_state = (errno == EAGAIN || errno == EWOULDBLOCK) ? FETCH_TIMEOUT : FETCH_IO_ERROR;
-            close(sockfd);
-            continue;
-        }
-        if (bytes_received == 0) {
+        int total_received = 0;
+        while (total_received < RESPONSE_BUFFER_SIZE - 1) {
+            int bytes_received = recv(
+                sockfd,
+                result.response + total_received,
+                RESPONSE_BUFFER_SIZE - 1 - total_received,
+                0
+            );
+
+            if (bytes_received > 0) {
+                total_received += bytes_received;
+                continue;
+            }
+
+            if (bytes_received == 0) {
+                break;
+            }
+
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (total_received == 0) {
+                    last_state = FETCH_TIMEOUT;
+                }
+                break;
+            }
+
             last_state = FETCH_IO_ERROR;
+            total_received = 0;
+            break;
+        }
+
+        if (total_received <= 0) {
             close(sockfd);
             continue;
         }
 
-        result.response[bytes_received] = '\0';
-        result.bytes_received = bytes_received;
+        result.response[total_received] = '\0';
+        result.bytes_received = total_received;
 
         int http_code = 0;
         if (sscanf(result.response, "HTTP/%*d.%*d %d", &http_code) != 1) {

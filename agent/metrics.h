@@ -36,4 +36,14 @@ typedef struct {
 
 CpuMetrics getCpuMetrics();
 
+typedef struct {
+    unsigned long long readSectors;
+    unsigned long long writeSectors;
+    float readMBps;
+    float writeMBps;
+    float totalMBps;
+} DiskMetrics;
+
+DiskMetrics getDiskMetrics();
+
 #endif
