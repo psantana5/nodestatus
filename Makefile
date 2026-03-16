@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
+CLI_FLAGS = -pthread
 BINDIR = bin
 
 AGENT_SOURCES = agent/agent.c agent/metrics.c agent/http.c
@@ -17,7 +18,7 @@ $(AGENT_TARGET): $(BINDIR) $(AGENT_SOURCES)
 	$(CC) $(CFLAGS) $(AGENT_SOURCES) -o $(AGENT_TARGET)
 
 $(CLI_TARGET): $(BINDIR) $(CLI_SOURCES)
-	$(CC) $(CFLAGS) $(CLI_SOURCES) -o $(CLI_TARGET)
+	$(CC) $(CFLAGS) $(CLI_FLAGS) $(CLI_SOURCES) -o $(CLI_TARGET)
 
 clean:
 	rm -rf $(BINDIR)
