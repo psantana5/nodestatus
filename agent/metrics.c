@@ -47,8 +47,8 @@ MemoryMetrics getMemoryMetrics() {
         }
     }
 
-     // We will calculate memUsed and memUsedPercent after we have read the total and free memory values
-    metrics.memUsed = metrics.MemTotal - metrics.MemFree;
+    // On Linux, MemAvailable is a better indicator for reclaimable memory than MemFree.
+    metrics.memUsed = (metrics.MemTotal >= metrics.MemAvailable) ? (metrics.MemTotal - metrics.MemAvailable) : 0;
     metrics.memUsedPercent = (metrics.MemTotal > 0) ? ((float)metrics.memUsed / metrics.MemTotal) * 100 : 0;
     
     fclose(fp);
