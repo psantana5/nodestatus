@@ -2,4 +2,4 @@ bin/
 agent/agent
 *.o
 docs/
-config/*
+config/*.txt
