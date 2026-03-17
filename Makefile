@@ -4,10 +4,10 @@ CLI_FLAGS = -pthread
 BINDIR = bin
 
 AGENT_SOURCES = agent/agent.c agent/metrics.c agent/http.c
-AGENT_TARGET = $(BINDIR)/nodestatus-agent
+AGENT_TARGET = $(BINDIR)/agent
 
 CLI_SOURCES = cli/cli.c cli/nodes.c cli/table.c
-CLI_TARGET = $(BINDIR)/nodestatus-cli
+CLI_TARGET = $(BINDIR)/cli
 
 all: $(AGENT_TARGET) $(CLI_TARGET)
 

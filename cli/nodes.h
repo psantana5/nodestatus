@@ -1,10 +1,10 @@
 #ifndef NODES_H
 #define NODES_H
 
-#define MAX_NODES 128
+#define MAX_NODES 128 // Max num of nodes to load from file. Also maxThreads value since it's 1 worker per node.
 #define MAX_HOSTNAME 256
 #define RESPONSE_BUFFER_SIZE 2048
-#define NODE_TIMEOUT_SECONDS 2
+#define NODE_TIMEOUT_SECONDS 2 // This is perhaps too low of a threshold?
 
 typedef struct {
     char hostname[MAX_HOSTNAME];
