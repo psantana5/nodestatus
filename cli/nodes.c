@@ -9,7 +9,22 @@
 #include <sys/select.h>
 #include "nodes.h"
 
-int loadNodes(const char *filename, Node nodes[], int max_nodes) {
+static void trim_whitespace(char *s) {
+    size_t len = strlen(s);
+    while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r' || s[len - 1] == '\n')) {
+        s[--len] = '\0';
+    }
+
+    size_t start = 0;
+    while (s[start] == ' ' || s[start] == '\t') {
+        start++;
+    }
+    if (start > 0) {
+        memmove(s, s + start, strlen(s + start) + 1);
+    }
+}
+
+int loadNodesByGroup(const char *filename, Node nodes[], int max_nodes, const char *group_filter) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("fopen");
@@ -17,20 +32,51 @@ int loadNodes(const char *filename, Node nodes[], int max_nodes) {
     }
 
     char line[256];
+    char current_group[MAX_GROUPNAME] = "default";
     int count = 0;
 
     while (fgets(line, sizeof(line), file) && count < max_nodes) {
         line[strcspn(line, "\r\n")] = 0;
+        trim_whitespace(line);
+
         if (line[0] == '\0') {
             continue;
         }
+
+        if (line[0] == '#') {
+            continue;
+        }
+
+        size_t len = strlen(line);
+        if (line[0] == '[' && len > 2 && line[len - 1] == ']') {
+            line[len - 1] = '\0';
+            strncpy(current_group, line + 1, MAX_GROUPNAME - 1);
+            current_group[MAX_GROUPNAME - 1] = '\0';
+            trim_whitespace(current_group);
+            if (current_group[0] == '\0') {
+                strncpy(current_group, "default", MAX_GROUPNAME - 1);
+                current_group[MAX_GROUPNAME - 1] = '\0';
+            }
+            continue;
+        }
+
+        if (group_filter && strcmp(group_filter, current_group) != 0) {
+            continue;
+        }
+
         strncpy(nodes[count].hostname, line, MAX_HOSTNAME - 1);
         nodes[count].hostname[MAX_HOSTNAME - 1] = '\0';
+        strncpy(nodes[count].group, current_group, MAX_GROUPNAME - 1);
+        nodes[count].group[MAX_GROUPNAME - 1] = '\0';
         count++;
     }
 
     fclose(file);
     return count;
+}
+
+int loadNodes(const char *filename, Node nodes[], int max_nodes) {
+    return loadNodesByGroup(filename, nodes, max_nodes, NULL);
 }
 
 static int connect_with_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, int timeout_seconds) {

@@ -95,15 +95,38 @@ static void render_status_table(const Node nodes[], int nodeCount) {
 int main(int argc, char *argv[])
 {
     Node nodes[MAX_NODES];
-    int nodeCount = loadNodes("config/nodes.txt", nodes, MAX_NODES);
-    if (nodeCount <= 0) {
-        printf("No nodes found\n");
+    const char *group_filter = NULL;
+    int watch_mode = 0;
+
+    if (argc == 1) {
+        /* default: one-shot status for all nodes */
+    } else if (strcmp(argv[1], "status") == 0) {
+        if (argc == 3) {
+            group_filter = argv[2];
+        } else if (argc > 3) {
+            printf("Usage: %s [status [group]|watch [group]]\n", argv[0]);
+            return 1;
+        }
+    } else if (strcmp(argv[1], "watch") == 0) {
+        watch_mode = 1;
+        if (argc == 3) {
+            group_filter = argv[2];
+        } else if (argc > 3) {
+            printf("Usage: %s [status [group]|watch [group]]\n", argv[0]);
+            return 1;
+        }
+    } else {
+        printf("Usage: %s [status [group]|watch [group]]\n", argv[0]);
         return 1;
     }
 
-    int watch_mode = (argc > 1 && strcmp(argv[1], "watch") == 0);
-    if (argc > 1 && !watch_mode) {
-        printf("Usage: %s [watch]\n", argv[0]);
+    int nodeCount = loadNodesByGroup("config/nodes.txt", nodes, MAX_NODES, group_filter);
+    if (nodeCount <= 0) {
+        if (group_filter) {
+            printf("No nodes found for group '%s'\n", group_filter);
+        } else {
+            printf("No nodes found\n");
+        }
         return 1;
     }
 
@@ -114,7 +137,11 @@ int main(int argc, char *argv[])
 
     while (1) {
         printf("\033[2J\033[H");
-        printf("nodectl watch (refresh every %d seconds)\n\n", NODE_TIMEOUT_SECONDS);
+        if (group_filter) {
+            printf("nodectl watch %s (refresh every %d seconds)\n\n", group_filter, NODE_TIMEOUT_SECONDS);
+        } else {
+            printf("nodectl watch (refresh every %d seconds)\n\n", NODE_TIMEOUT_SECONDS);
+        }
         render_status_table(nodes, nodeCount);
         sleep(NODE_TIMEOUT_SECONDS);
     }
