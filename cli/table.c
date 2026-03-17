@@ -24,7 +24,7 @@ static const char *fetch_state_to_string(FetchState state) {
 }
 
 void printTableHeader() {
-    printf("%-20s %-11s %-8s %-8s %-8s %-8s\n", "HOST", "STATE", "CPU", "MEM", "LOAD", "DISK");
+    printf("%-20s %-11s %-8s %-8s %-8s %-8s\n", "HOST", "STATE", "CPU(%)", "MEM(%)", "LOAD", "DISK(MB/s)");
     printf("-------------------------------------------------------------------------\n");
 }
 
