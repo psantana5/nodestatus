@@ -58,6 +58,25 @@ For example, the command `nodectl status` will output a table like this one:
 | node02 | 87% | 84% | 4.1  |
 | node03 | 12% | 35% | 0.2  |
 
+### Node groups
+
+Nodes can be grouped in `config/nodes.txt` using section headers:
+
+```
+[HPC]
+host1
+host2
+
+[LAB]
+host3
+```
+
+Commands:
+- `nodectl status` → all configured nodes
+- `nodectl status HPC` → only nodes in group `HPC`
+- `nodectl watch` → continuous refresh for all nodes
+- `nodectl watch HPC` → continuous refresh for group `HPC`
+
 ---
 
 ## Metrics (v1)
