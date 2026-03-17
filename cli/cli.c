@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 #include "nodes.h"
 #include "table.h"
 
@@ -50,17 +51,7 @@ static void *query_node_thread(void *arg) {
     return NULL;
 }
 
-int main()
-{
-    Node nodes[MAX_NODES];
-
-    int nodeCount = loadNodes("config/nodes.txt", nodes, MAX_NODES);
-
-    if (nodeCount == 0) {
-        printf("No nodes found\n");
-        return 1;
-    }
-
+static void render_status_table(const Node nodes[], int nodeCount) {
     NodeStatus statuses[MAX_NODES];
     QueryTask tasks[MAX_NODES];
     pthread_t threads[MAX_NODES];
@@ -99,6 +90,34 @@ int main()
         printTableRow(&statuses[i]);
     }
     printTableFooter(ok_count, fail_count);
+}
+
+int main(int argc, char *argv[])
+{
+    Node nodes[MAX_NODES];
+    int nodeCount = loadNodes("config/nodes.txt", nodes, MAX_NODES);
+    if (nodeCount <= 0) {
+        printf("No nodes found\n");
+        return 1;
+    }
+
+    int watch_mode = (argc > 1 && strcmp(argv[1], "watch") == 0);
+    if (argc > 1 && !watch_mode) {
+        printf("Usage: %s [watch]\n", argv[0]);
+        return 1;
+    }
+
+    if (!watch_mode) {
+        render_status_table(nodes, nodeCount);
+        return 0;
+    }
+
+    while (1) {
+        printf("\033[2J\033[H");
+        printf("nodectl watch (refresh every %d seconds)\n\n", NODE_TIMEOUT_SECONDS);
+        render_status_table(nodes, nodeCount);
+        sleep(NODE_TIMEOUT_SECONDS);
+    }
 
     return 0;
 }
