@@ -42,8 +42,8 @@ static void query_node(const Node *node, NodeStatus *status, int timeout_ms, int
     status->disk_mb_s = 0.0f;
 
     FetchResult fetch_result = (persistent_sockfd == NULL)
-        ? fetchStatus(node->hostname, timeout_ms)
-        : fetchStatusWithConnection(node->hostname, timeout_ms, persistent_sockfd);
+        ? fetchStatus(node->hostname, node->port, timeout_ms)
+        : fetchStatusWithConnection(node->hostname, node->port, timeout_ms, persistent_sockfd);
     status->state = fetch_result.state;
     status->latency_ms = fetch_result.latency_ms;
 

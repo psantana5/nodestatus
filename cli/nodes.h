@@ -7,10 +7,12 @@
 #define RESPONSE_BUFFER_SIZE 2048
 #define NODE_CONNECT_TIMEOUT_MS 500
 #define NODE_WATCH_INTERVAL_MS 1000
+#define NODE_AGENT_DEFAULT_PORT 9002
 #define INVENTORY_FILE "config/inventory.yaml" // This is the default inventory file path.
 
 typedef struct {
     char hostname[MAX_HOSTNAME];
+    int port;
     char group[MAX_GROUPNAME];
 } Node;
 
@@ -33,7 +35,7 @@ typedef struct {
 
 int loadNodes(const char *filename, Node *nodes, int max_nodes);
 int loadNodesByGroup(const char *filename, Node *nodes, int max_nodes, const char *group_filter);
-FetchResult fetchStatus(const char *hostname, int timeout_ms);
-FetchResult fetchStatusWithConnection(const char *hostname, int timeout_ms, int *persistent_sockfd);
+FetchResult fetchStatus(const char *hostname, int port, int timeout_ms);
+FetchResult fetchStatusWithConnection(const char *hostname, int port, int timeout_ms, int *persistent_sockfd);
 
 #endif // NODES_H

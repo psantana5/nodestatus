@@ -38,10 +38,15 @@
 ---
 ## Agent's responsibilites
 The agent takes care of:
-- Listening in port `9002`.
+- Listening on port `9002` by default.
 - Managing the `/status` endpoint where metrics are exposed.
 - Reading and parsing system metrics from the standard Linux interfaces.
 - Returning the JSON with the metrics.
+
+You can start the agent on a custom port:
+- `./bin/agent` (default: `9002`)
+- `./bin/agent --port 9010`
+- `./bin/agent -p 9010`
 
 ## CLI tool responsibilities
 The CLI tool takes care of:
@@ -67,11 +72,14 @@ groups:
   HPC:
     hosts:
       - host1
-      - host2
+      - host2:9010
   LAB:
     hosts:
       - host3
 ```
+
+Per-node custom ports are supported directly in inventory with `host:port`.
+If no port is provided, CLI uses default agent port `9002`.
 
 Commands:
 - `nodectl status` → all configured nodes
@@ -81,6 +89,7 @@ Commands:
 
 YAML parser scope in this version is intentionally simple:
 - Supports only: `groups -> <group> -> hosts -> - <host>`
+- Host entries may be `host` or `host:port`
 - No nested children beyond that structure
 - No external YAML library is used
 

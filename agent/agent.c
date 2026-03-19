@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <errno.h>
 #include "metrics.h"
 #include "http.h"
 
@@ -18,7 +19,27 @@
 // Listens on port 9002 and responds to /status with JSON metrics
 // For simplicity, this server handles one request at a time and does not implement concurrency
 
-int socketServer(){
+static void print_usage(const char *progname) {
+    printf("Usage: %s [-p port|--port port|--port=port]\n", progname);
+}
+
+static int parse_port_value(const char *text, int *port_out) {
+    if (!text || !*text) {
+        return -1;
+    }
+
+    char *endptr = NULL;
+    errno = 0;
+    long value = strtol(text, &endptr, 10);
+    if (errno != 0 || endptr == text || *endptr != '\0' || value < 1 || value > 65535) {
+        return -1;
+    }
+
+    *port_out = (int)value;
+    return 0;
+}
+
+int socketServer(int port){
     if (initMetricsSampler() != 0) {
         perror("initMetricsSampler");
         return 1;
@@ -41,9 +62,10 @@ int socketServer(){
     struct sockaddr_in address = {0}; // Zero-initialize the structure to avoid any garbage values
     address.sin_family = AF_INET; // Use IPv4
     address.sin_addr.s_addr = INADDR_ANY; // Listen on all interfaces
-    address.sin_port = htons(9002); // Convert port number to network byte order
+    address.sin_port = htons((unsigned short)port); // Convert port number to network byte order
 
     if (bind(server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) { // Bind the socket to the specified address and port
+        fprintf(stderr, "bind failed on port %d\n", port);
         perror("bind");
         close(server_socket);
         return 1;
@@ -56,7 +78,7 @@ int socketServer(){
         return 1;
     }
 
-    printf("Server listening on port 9002...\n");
+    printf("Server listening on port %d...\n", port);
 
     while (1) { // Main loop to accept and handle incoming connections
         int client_socket; // Socket for the accepted client connection
@@ -118,8 +140,39 @@ int socketServer(){
     return 0;
 }
 
-int main(){
-    printf("Agent starting...\n");
-    socketServer();
-    return 0;
+int main(int argc, char *argv[]){
+    int port = 9002;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        }
+
+        if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--port") == 0) {
+            if (i + 1 >= argc || parse_port_value(argv[i + 1], &port) != 0) {
+                fprintf(stderr, "Invalid port value\n");
+                print_usage(argv[0]);
+                return 1;
+            }
+            i++;
+            continue;
+        }
+
+        if (strncmp(argv[i], "--port=", 7) == 0) {
+            if (parse_port_value(argv[i] + 7, &port) != 0) {
+                fprintf(stderr, "Invalid port value\n");
+                print_usage(argv[0]);
+                return 1;
+            }
+            continue;
+        }
+
+        fprintf(stderr, "Unknown argument: %s\n", argv[i]);
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    printf("Agent starting on port %d...\n", port);
+    return socketServer(port);
 }

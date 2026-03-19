@@ -34,6 +34,35 @@ static int yaml_indent_spaces(const char *line) {
     return indent;
 }
 
+static int parse_host_and_port(const char *input, char *hostname_out, size_t hostname_out_size, int *port_out) {
+    if (!input || !hostname_out || hostname_out_size == 0 || !port_out) {
+        return -1;
+    }
+
+    const char *colon = strrchr(input, ':');
+    if (!colon || strchr(colon + 1, ':') != NULL) {
+        strncpy(hostname_out, input, hostname_out_size - 1);
+        hostname_out[hostname_out_size - 1] = '\0';
+        *port_out = NODE_AGENT_DEFAULT_PORT;
+        return 0;
+    }
+
+    size_t host_len = (size_t)(colon - input);
+    if (host_len == 0 || host_len >= hostname_out_size) {
+        return -1;
+    }
+    memcpy(hostname_out, input, host_len);
+    hostname_out[host_len] = '\0';
+
+    char *endptr = NULL;
+    long parsed_port = strtol(colon + 1, &endptr, 10);
+    if (endptr == colon + 1 || *endptr != '\0' || parsed_port < 1 || parsed_port > 65535) {
+        return -1;
+    }
+    *port_out = (int)parsed_port;
+    return 0;
+}
+
 static int loadNodesByGroupFromYaml(const char *filename, Node nodes[], int max_nodes, const char *group_filter) {
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -96,8 +125,9 @@ static int loadNodesByGroupFromYaml(const char *filename, Node nodes[], int max_
                 continue;
             }
 
-            strncpy(nodes[count].hostname, host, MAX_HOSTNAME - 1);
-            nodes[count].hostname[MAX_HOSTNAME - 1] = '\0';
+            if (parse_host_and_port(host, nodes[count].hostname, MAX_HOSTNAME, &nodes[count].port) != 0) {
+                continue;
+            }
             strncpy(nodes[count].group, current_group, MAX_GROUPNAME - 1);
             nodes[count].group[MAX_GROUPNAME - 1] = '\0';
             count++;
@@ -158,8 +188,9 @@ int loadNodesByGroup(const char *filename, Node nodes[], int max_nodes, const ch
             continue;
         }
 
-        strncpy(nodes[count].hostname, line, MAX_HOSTNAME - 1);
-        nodes[count].hostname[MAX_HOSTNAME - 1] = '\0';
+        if (parse_host_and_port(line, nodes[count].hostname, MAX_HOSTNAME, &nodes[count].port) != 0) {
+            continue;
+        }
         strncpy(nodes[count].group, current_group, MAX_GROUPNAME - 1);
         nodes[count].group[MAX_GROUPNAME - 1] = '\0';
         count++;
@@ -308,7 +339,7 @@ static int elapsed_ms_since(const struct timespec *start_ts) {
     return (int)(seconds * 1000L + nanoseconds / 1000000L);
 }
 
-static FetchResult fetch_status_internal(const char *hostname, int timeout_ms, int *persistent_sockfd) {
+static FetchResult fetch_status_internal(const char *hostname, int port, int timeout_ms, int *persistent_sockfd) {
     FetchResult result;
     result.state = FETCH_CONNECT_ERROR;
     result.bytes_received = 0;
@@ -323,10 +354,16 @@ static FetchResult fetch_status_internal(const char *hostname, int timeout_ms, i
 
 retry_with_fresh_connection:
     struct addrinfo hints = {0}, *res = NULL, *rp = NULL;
+    char service_port[16];
+    if (snprintf(service_port, sizeof(service_port), "%d", port) <= 0 || port < 1 || port > 65535) {
+        result.state = FETCH_CONNECT_ERROR;
+        result.latency_ms = elapsed_ms_since(&start_ts);
+        return result;
+    }
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if (getaddrinfo(hostname, "9002", &hints, &res) != 0) {
+    if (getaddrinfo(hostname, service_port, &hints, &res) != 0) {
         result.state = FETCH_DNS_ERROR;
         result.latency_ms = elapsed_ms_since(&start_ts);
         return result;
@@ -465,10 +502,10 @@ retry_with_fresh_connection:
     return result;
 }
 
-FetchResult fetchStatus(const char *hostname, int timeout_ms) {
-    return fetch_status_internal(hostname, timeout_ms, NULL);
+FetchResult fetchStatus(const char *hostname, int port, int timeout_ms) {
+    return fetch_status_internal(hostname, port, timeout_ms, NULL);
 }
 
-FetchResult fetchStatusWithConnection(const char *hostname, int timeout_ms, int *persistent_sockfd) {
-    return fetch_status_internal(hostname, timeout_ms, persistent_sockfd);
+FetchResult fetchStatusWithConnection(const char *hostname, int port, int timeout_ms, int *persistent_sockfd) {
+    return fetch_status_internal(hostname, port, timeout_ms, persistent_sockfd);
 }
