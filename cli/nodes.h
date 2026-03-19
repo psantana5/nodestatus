@@ -27,6 +27,7 @@ typedef enum {
 typedef struct {
     FetchState state;
     int bytes_received;
+    int latency_ms;
     char response[RESPONSE_BUFFER_SIZE];
 } FetchResult;
 

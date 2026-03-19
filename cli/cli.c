@@ -34,6 +34,7 @@ static void query_node(const Node *node, NodeStatus *status, int timeout_ms, int
     strncpy(status->hostname, node->hostname, sizeof(status->hostname) - 1);
     status->hostname[sizeof(status->hostname) - 1] = '\0';
     status->state = FETCH_IO_ERROR;
+    status->latency_ms = 0;
     status->has_metrics = 0;
     status->cpu_percent = 0.0f;
     status->mem_percent = 0.0f;
@@ -44,6 +45,7 @@ static void query_node(const Node *node, NodeStatus *status, int timeout_ms, int
         ? fetchStatus(node->hostname, timeout_ms)
         : fetchStatusWithConnection(node->hostname, timeout_ms, persistent_sockfd);
     status->state = fetch_result.state;
+    status->latency_ms = fetch_result.latency_ms;
 
     if (fetch_result.state == FETCH_OK) {
         const char *json_body = extract_json_body(fetch_result.response);

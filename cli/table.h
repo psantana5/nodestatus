@@ -6,6 +6,7 @@
 typedef struct {
     char hostname[256];
     FetchState state;
+    int latency_ms;
     int has_metrics;
     float load;
     float cpu_percent;

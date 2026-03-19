@@ -24,16 +24,17 @@ static const char *fetch_state_to_string(FetchState state) {
 }
 
 void printTableHeader() {
-    printf("%-20s %-11s %-8s %-8s %-8s %-8s\n", "HOST", "STATE", "CPU(%)", "MEM(%)", "LOAD", "DISK (MB/s)");
-    printf("-------------------------------------------------------------------------\n");
+    printf("%-20s %-11s %-8s %-8s %-8s %-8s %-11s\n", "HOST", "STATE", "RESP(ms)", "CPU(%)", "MEM(%)", "LOAD", "DISK (MB/s)");
+    printf("------------------------------------------------------------------------------------\n");
 }
 
 void printTableRow(const NodeStatus *status) {
     if (status->has_metrics) {
         printf(
-            "%-20s %-11s %6.1f%% %6.1f%% %7.2f %7.2f\n",
+            "%-20s %-11s %8d %6.1f%% %6.1f%% %7.2f %7.2f\n",
             status->hostname,
             fetch_state_to_string(status->state),
+            status->latency_ms,
             status->cpu_percent,
             status->mem_percent,
             status->load,
@@ -43,9 +44,10 @@ void printTableRow(const NodeStatus *status) {
     }
 
     printf(
-        "%-20s %-11s %-8s %-8s %-8s %-8s\n",
+        "%-20s %-11s %8d %-8s %-8s %-8s %-11s\n",
         status->hostname,
         fetch_state_to_string(status->state),
+        status->latency_ms,
         "N/A",
         "N/A",
         "N/A",
@@ -54,7 +56,7 @@ void printTableRow(const NodeStatus *status) {
 }
 
 void printTableFooter(int ok_count, int fail_count) {
-    printf("-------------------------------------------------------------------------\n");
+    printf("------------------------------------------------------------------------------------\n");
     printf("OK: %d  Failed: %d\n\n", ok_count, fail_count);
 }
 

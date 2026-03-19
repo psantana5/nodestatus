@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/select.h>
+#include <time.h>
 #include "nodes.h"
 
 static void trim_whitespace(char *s) {
@@ -290,11 +291,31 @@ static int receive_http_response(int sockfd, char *buffer, int buffer_size, Fetc
     return -1;
 }
 
+static int elapsed_ms_since(const struct timespec *start_ts) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return 0;
+    }
+    long seconds = now.tv_sec - start_ts->tv_sec;
+    long nanoseconds = now.tv_nsec - start_ts->tv_nsec;
+    if (nanoseconds < 0) {
+        seconds -= 1;
+        nanoseconds += 1000000000L;
+    }
+    if (seconds < 0) {
+        return 0;
+    }
+    return (int)(seconds * 1000L + nanoseconds / 1000000L);
+}
+
 static FetchResult fetch_status_internal(const char *hostname, int timeout_ms, int *persistent_sockfd) {
     FetchResult result;
     result.state = FETCH_CONNECT_ERROR;
     result.bytes_received = 0;
+    result.latency_ms = 0;
     result.response[0] = '\0';
+    struct timespec start_ts;
+    (void)clock_gettime(CLOCK_MONOTONIC, &start_ts);
 
     int use_persistent = (persistent_sockfd != NULL);
     int sockfd = use_persistent ? *persistent_sockfd : -1;
@@ -307,6 +328,7 @@ retry_with_fresh_connection:
 
     if (getaddrinfo(hostname, "9002", &hints, &res) != 0) {
         result.state = FETCH_DNS_ERROR;
+        result.latency_ms = elapsed_ms_since(&start_ts);
         return result;
     }
 
@@ -354,7 +376,7 @@ retry_with_fresh_connection:
             hostname
         );
         if (request_len <= 0 || request_len >= (int)sizeof(request_buffer)) {
-            result.state = FETCH_IO_ERROR;
+            last_state = FETCH_IO_ERROR;
             close(sockfd);
             sockfd = -1;
             break;
@@ -427,6 +449,7 @@ retry_with_fresh_connection:
             close(sockfd);
         }
         freeaddrinfo(res);
+        result.latency_ms = elapsed_ms_since(&start_ts);
         return result;
     }
 
@@ -438,6 +461,7 @@ retry_with_fresh_connection:
     }
     freeaddrinfo(res);
     result.state = last_state;
+    result.latency_ms = elapsed_ms_since(&start_ts);
     return result;
 }
 
