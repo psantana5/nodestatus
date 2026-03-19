@@ -172,7 +172,21 @@ int loadNodes(const char *filename, Node nodes[], int max_nodes) {
     return loadNodesByGroup(filename, nodes, max_nodes, NULL);
 }
 
-static int connect_with_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, int timeout_seconds) {
+static int set_socket_timeouts_ms(int sockfd, int timeout_ms) {
+    struct timeval socket_timeout = {
+        timeout_ms / 1000,
+        (timeout_ms % 1000) * 1000
+    };
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout)) < 0) {
+        return -1;
+    }
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int connect_with_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, int timeout_ms) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     if (flags < 0 || fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0) {
         return -1;
@@ -191,7 +205,7 @@ static int connect_with_timeout(int sockfd, const struct sockaddr *addr, socklen
     FD_ZERO(&write_fds);
     FD_SET(sockfd, &write_fds);
 
-    struct timeval timeout = {timeout_seconds, 0};
+    struct timeval timeout = {timeout_ms / 1000, (timeout_ms % 1000) * 1000};
     int ready = select(sockfd + 1, NULL, &write_fds, NULL, &timeout);
     if (ready <= 0) {
         errno = (ready == 0) ? ETIMEDOUT : errno;
@@ -214,12 +228,79 @@ static int connect_with_timeout(int sockfd, const struct sockaddr *addr, socklen
     return 0;
 }
 
-FetchResult fetchStatus(const char *hostname, int timeout_seconds) {
+static int parse_content_length(const char *response) {
+    const char *content_len = strstr(response, "\r\nContent-Length:");
+    if (!content_len) {
+        return -1;
+    }
+
+    int length = -1;
+    if (sscanf(content_len, "\r\nContent-Length: %d", &length) != 1) {
+        return -1;
+    }
+    return length;
+}
+
+static int receive_http_response(int sockfd, char *buffer, int buffer_size, FetchState *state_out) {
+    int total_received = 0;
+    int header_end = -1;
+    int content_length = -1;
+
+    while (total_received < buffer_size - 1) {
+        int bytes_received = recv(sockfd, buffer + total_received, buffer_size - 1 - total_received, 0);
+        if (bytes_received > 0) {
+            total_received += bytes_received;
+            buffer[total_received] = '\0';
+
+            if (header_end < 0) {
+                char *header_ptr = strstr(buffer, "\r\n\r\n");
+                if (header_ptr) {
+                    header_end = (int)(header_ptr - buffer) + 4;
+                    content_length = parse_content_length(buffer);
+                    if (content_length >= 0) {
+                        int needed = header_end + content_length;
+                        if (total_received >= needed) {
+                            return total_received;
+                        }
+                    }
+                }
+            } else if (content_length >= 0) {
+                int needed = header_end + content_length;
+                if (total_received >= needed) {
+                    return total_received;
+                }
+            }
+            continue;
+        }
+
+        if (bytes_received == 0) {
+            return total_received;
+        }
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            *state_out = (total_received == 0) ? FETCH_TIMEOUT : FETCH_IO_ERROR;
+            return -1;
+        }
+
+        *state_out = FETCH_IO_ERROR;
+        return -1;
+    }
+
+    *state_out = FETCH_IO_ERROR;
+    return -1;
+}
+
+static FetchResult fetch_status_internal(const char *hostname, int timeout_ms, int *persistent_sockfd) {
     FetchResult result;
     result.state = FETCH_CONNECT_ERROR;
     result.bytes_received = 0;
     result.response[0] = '\0';
 
+    int use_persistent = (persistent_sockfd != NULL);
+    int sockfd = use_persistent ? *persistent_sockfd : -1;
+    int attempted_reconnect = 0;
+
+retry_with_fresh_connection:
     struct addrinfo hints = {0}, *res = NULL, *rp = NULL;
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -231,73 +312,100 @@ FetchResult fetchStatus(const char *hostname, int timeout_seconds) {
 
     FetchState last_state = FETCH_CONNECT_ERROR;
 
-    for (rp = res; rp != NULL; rp = rp->ai_next) {
-        int sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (sockfd < 0) {
-            continue;
-        }
-
-        if (connect_with_timeout(sockfd, rp->ai_addr, rp->ai_addrlen, timeout_seconds) < 0) {
-            last_state = (errno == ETIMEDOUT) ? FETCH_TIMEOUT : FETCH_CONNECT_ERROR;
+    if (sockfd >= 0) {
+        if (set_socket_timeouts_ms(sockfd, timeout_ms) < 0) {
             close(sockfd);
-            continue;
+            sockfd = -1;
+            if (use_persistent) {
+                *persistent_sockfd = -1;
+            }
         }
+    }
 
-        struct timeval socket_timeout = {timeout_seconds, 0};
-        (void)setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
-        (void)setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &socket_timeout, sizeof(socket_timeout));
+    for (rp = res; rp != NULL; rp = rp->ai_next) {
+        if (sockfd < 0) {
+            sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+            if (sockfd < 0) {
+                continue;
+            }
+
+            if (connect_with_timeout(sockfd, rp->ai_addr, rp->ai_addrlen, timeout_ms) < 0) {
+                last_state = (errno == ETIMEDOUT) ? FETCH_TIMEOUT : FETCH_CONNECT_ERROR;
+                close(sockfd);
+                sockfd = -1;
+                continue;
+            }
+
+            if (set_socket_timeouts_ms(sockfd, timeout_ms) < 0) {
+                last_state = FETCH_IO_ERROR;
+                close(sockfd);
+                sockfd = -1;
+                continue;
+            }
+        }
 
         char request_buffer[512];
         int request_len = snprintf(
             request_buffer,
             sizeof(request_buffer),
-            "GET /status HTTP/1.0\r\nHost: %s\r\n\r\n",
+            use_persistent
+                ? "GET /status HTTP/1.0\r\nHost: %s\r\nConnection: keep-alive\r\n\r\n"
+                : "GET /status HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n",
             hostname
         );
         if (request_len <= 0 || request_len >= (int)sizeof(request_buffer)) {
             result.state = FETCH_IO_ERROR;
             close(sockfd);
+            sockfd = -1;
             break;
         }
 
         if (send(sockfd, request_buffer, (size_t)request_len, 0) < 0) {
-            last_state = (errno == EAGAIN || errno == EWOULDBLOCK) ? FETCH_TIMEOUT : FETCH_IO_ERROR;
+            if (use_persistent && !attempted_reconnect) {
+                attempted_reconnect = 1;
+                close(sockfd);
+                sockfd = -1;
+                freeaddrinfo(res);
+                goto retry_with_fresh_connection;
+            }
+            last_state = (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT) ? FETCH_TIMEOUT : FETCH_IO_ERROR;
             close(sockfd);
+            sockfd = -1;
             continue;
         }
 
-        int total_received = 0;
-        while (total_received < RESPONSE_BUFFER_SIZE - 1) {
-            int bytes_received = recv(
-                sockfd,
-                result.response + total_received,
-                RESPONSE_BUFFER_SIZE - 1 - total_received,
-                0
-            );
+        FetchState recv_state = FETCH_IO_ERROR;
+        int total_received = receive_http_response(
+            sockfd,
+            result.response,
+            RESPONSE_BUFFER_SIZE,
+            &recv_state
+        );
 
-            if (bytes_received > 0) {
-                total_received += bytes_received;
-                continue;
+        if (total_received < 0) {
+            if (use_persistent && !attempted_reconnect) {
+                attempted_reconnect = 1;
+                close(sockfd);
+                sockfd = -1;
+                freeaddrinfo(res);
+                goto retry_with_fresh_connection;
             }
-
-            if (bytes_received == 0) {
-                break;
-            }
-
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (total_received == 0) {
-                    last_state = FETCH_TIMEOUT;
-                }
-                break;
-            }
-
-            last_state = FETCH_IO_ERROR;
-            total_received = 0;
-            break;
+            last_state = recv_state;
+            close(sockfd);
+            sockfd = -1;
+            continue;
         }
 
         if (total_received <= 0) {
+            if (use_persistent && !attempted_reconnect) {
+                attempted_reconnect = 1;
+                close(sockfd);
+                sockfd = -1;
+                freeaddrinfo(res);
+                goto retry_with_fresh_connection;
+            }
             close(sockfd);
+            sockfd = -1;
             continue;
         }
 
@@ -313,12 +421,30 @@ FetchResult fetchStatus(const char *hostname, int timeout_seconds) {
             result.state = FETCH_OK;
         }
 
-        close(sockfd);
+        if (use_persistent) {
+            *persistent_sockfd = sockfd;
+        } else {
+            close(sockfd);
+        }
         freeaddrinfo(res);
         return result;
     }
 
+    if (sockfd >= 0) {
+        close(sockfd);
+    }
+    if (use_persistent) {
+        *persistent_sockfd = -1;
+    }
     freeaddrinfo(res);
     result.state = last_state;
     return result;
+}
+
+FetchResult fetchStatus(const char *hostname, int timeout_ms) {
+    return fetch_status_internal(hostname, timeout_ms, NULL);
+}
+
+FetchResult fetchStatusWithConnection(const char *hostname, int timeout_ms, int *persistent_sockfd) {
+    return fetch_status_internal(hostname, timeout_ms, persistent_sockfd);
 }

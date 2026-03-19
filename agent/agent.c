@@ -67,40 +67,47 @@ int socketServer(){
             continue;
         }
 
-        char request[1024];
-        ssize_t bytes = read(client_socket, request, sizeof(request) - 1); // Read the client's request into the buffer, leaving space for a null terminator
-        if (bytes > 0) {
-            request[bytes] = '\0'; // Null-terminate the request string to safely use it as a C string
-        } else {
-            request[0] = '\0'; // If read fails, we set the request to an empty string to avoid undefined behavior when processing it
-        }
-
-        char *path = parseRequestPath(request); // Extract the requested path from the HTTP request
-        if (path) {
-            printf("Request: %s\n", path); // Log the requested path for debugging purposes. This can help us verify that the server is correctly parsing incoming requests and can be useful for troubleshooting issues with client requests.
-        }
-
-        char body[2048]; // Buffer to hold the response body, which will contain the JSON metrics if the request is for /status
-        
-        if (path && strcmp(path, "/health") == 0) { // If the requested path is /health, we can return a simple response indicating that the server is running. This can be used for health checks by monitoring systems.
-            (void)sendHttpResponse(client_socket, 200, "OK", "OK", "text/plain");
-        }
-        else if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
-            SystemMetrics snapshot = {0};
-            if (getMetricsSnapshot(&snapshot) != 0) {
-                (void)sendHttpResponse(client_socket, 500, "Internal Server Error", "Internal Server Error", "text/plain");
-                close(client_socket);
-                continue;
-            }
-
-            int body_len = buildJsonResponse(body, sizeof(body), &snapshot); // Build a JSON response string containing the metrics, which will be sent back to the client
-            if (body_len > 0 && body_len < (int)sizeof(body)) {
-                (void)sendHttpResponse(client_socket, 200, "OK", body, "application/json"); // Send the HTTP response with the JSON body and the appropriate content type header
+        while (1) {
+            char request[1024];
+            ssize_t bytes = read(client_socket, request, sizeof(request) - 1); // Read the client's request into the buffer, leaving space for a null terminator
+            if (bytes > 0) {
+                request[bytes] = '\0'; // Null-terminate the request string to safely use it as a C string
             } else {
-                (void)sendHttpResponse(client_socket, 500, "Internal Server Error", "Internal Server Error", "text/plain");
+                break;
             }
-        } else {
-            (void)sendHttpResponse(client_socket, 404, "Not Found", "404 Not Found", "text/plain");
+
+            char *path = parseRequestPath(request); // Extract the requested path from the HTTP request
+            if (path) {
+                printf("Request: %s\n", path); // Log the requested path for debugging purposes. This can help us verify that the server is correctly parsing incoming requests and can be useful for troubleshooting issues with client requests.
+            }
+
+            int keep_alive = (strstr(request, "Connection: keep-alive") != NULL);
+            char body[2048]; // Buffer to hold the response body, which will contain the JSON metrics if the request is for /status
+            
+            if (path && strcmp(path, "/health") == 0) { // If the requested path is /health, we can return a simple response indicating that the server is running. This can be used for health checks by monitoring systems.
+                (void)sendHttpResponse(client_socket, 200, "OK", "OK", "text/plain", keep_alive);
+            }
+            else if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
+                SystemMetrics snapshot = {0};
+                if (getMetricsSnapshot(&snapshot) != 0) {
+                    (void)sendHttpResponse(client_socket, 500, "Internal Server Error", "Internal Server Error", "text/plain", 0);
+                    break;
+                }
+
+                int body_len = buildJsonResponse(body, sizeof(body), &snapshot); // Build a JSON response string containing the metrics, which will be sent back to the client
+                if (body_len > 0 && body_len < (int)sizeof(body)) {
+                    (void)sendHttpResponse(client_socket, 200, "OK", body, "application/json", keep_alive); // Send the HTTP response with the JSON body and the appropriate content type header
+                } else {
+                    (void)sendHttpResponse(client_socket, 500, "Internal Server Error", "Internal Server Error", "text/plain", 0);
+                    break;
+                }
+            } else {
+                (void)sendHttpResponse(client_socket, 404, "Not Found", "404 Not Found", "text/plain", keep_alive);
+            }
+
+            if (!keep_alive) {
+                break;
+            }
         }
         close(client_socket);
         

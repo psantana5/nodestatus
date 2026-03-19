@@ -59,19 +59,20 @@ int buildJsonResponse(char *buffer, int buffer_size, const SystemMetrics *metric
         metrics->disk.totalMBps);
 }
 
-int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type) {
+int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type, int keep_alive) {
     char response[4096];
     int response_len = snprintf(response, sizeof(response),
         "HTTP/1.0 %d %s\r\n"
         "Content-Type: %s\r\n"
         "Content-Length: %zu\r\n"
-        "Connection: close\r\n"
+        "Connection: %s\r\n"
         "\r\n"
         "%s",
         status_code,
         status_text,
         content_type,
         strlen(body),
+        keep_alive ? "keep-alive" : "close",
         body);
 
     if (response_len <= 0 || response_len >= (int)sizeof(response)) {

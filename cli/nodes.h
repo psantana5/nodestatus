@@ -5,8 +5,9 @@
 #define MAX_HOSTNAME 256
 #define MAX_GROUPNAME 64
 #define RESPONSE_BUFFER_SIZE 2048
-#define NODE_TIMEOUT_SECONDS 2 // This is perhaps too low of a threshold?
-#define INVENTORY_FILE "config/inventory.yaml" // This is the default inventory file path. It can be overridden by passing a different path to loadNodes or loadNodesByGroup.
+#define NODE_CONNECT_TIMEOUT_MS 500
+#define NODE_WATCH_INTERVAL_MS 1000
+#define INVENTORY_FILE "config/inventory.yaml" // This is the default inventory file path.
 
 typedef struct {
     char hostname[MAX_HOSTNAME];
@@ -31,6 +32,7 @@ typedef struct {
 
 int loadNodes(const char *filename, Node *nodes, int max_nodes);
 int loadNodesByGroup(const char *filename, Node *nodes, int max_nodes, const char *group_filter);
-FetchResult fetchStatus(const char *hostname, int timeout_seconds);
+FetchResult fetchStatus(const char *hostname, int timeout_ms);
+FetchResult fetchStatusWithConnection(const char *hostname, int timeout_ms, int *persistent_sockfd);
 
 #endif // NODES_H

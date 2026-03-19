@@ -5,6 +5,6 @@
 
 char* parseRequestPath(const char *request);
 int buildJsonResponse(char *buffer, int buffer_size, const SystemMetrics *metrics);
-int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type);
+int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type, int keep_alive);
 
 #endif
