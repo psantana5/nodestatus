@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <errno.h>
 #include "http.h"
 
 char* parseRequestPath(const char *request) {
@@ -52,20 +53,38 @@ int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, Memory
         diskMetrics.totalMBps);
 }
 
-void sendHttpResponse(int client_socket, const char *body, const char *content_type) {
+int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type) {
     char response[4096];
     int response_len = snprintf(response, sizeof(response),
-        "HTTP/1.0 200 OK\r\n"
+        "HTTP/1.0 %d %s\r\n"
         "Content-Type: %s\r\n"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n"
         "\r\n"
         "%s",
+        status_code,
+        status_text,
         content_type,
         strlen(body),
         body);
-    
-    if (response_len > 0) {
-        send(client_socket, response, response_len, 0);
+
+    if (response_len <= 0 || response_len >= (int)sizeof(response)) {
+        return -1;
     }
+
+    int total_sent = 0;
+    while (total_sent < response_len) {
+        ssize_t sent = send(client_socket, response + total_sent, (size_t)(response_len - total_sent), 0);
+        if (sent < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        if (sent == 0) {
+            return -1;
+        }
+        total_sent += (int)sent;
+    }
+    return 0;
 }

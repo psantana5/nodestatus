@@ -6,6 +6,35 @@
 #include <time.h>
 #include "metrics.h"
 
+#define CPU_SAMPLE_WINDOW_US 100000
+#define DISK_SAMPLE_WINDOW_US 200000
+#define CPU_MIN_REFRESH_MS 500
+
+typedef struct {
+    int initialized;
+    unsigned long long user;
+    unsigned long long nice;
+    unsigned long long system;
+    unsigned long long idle;
+    unsigned long long iowait;
+    struct timespec ts;
+} CpuBaseline;
+
+typedef struct {
+    int initialized;
+    unsigned long long read_sectors;
+    unsigned long long write_sectors;
+    struct timespec ts;
+} DiskBaseline;
+
+static CpuBaseline cpu_baseline = {0, 0, 0, 0, 0, 0, {0, 0}};
+static DiskBaseline disk_baseline = {0, 0, 0, {0, 0}};
+static CpuMetrics cpu_cached_metrics = {0, 0, 0, 0, 0, 0, 0.0f};
+
+static double elapsed_seconds(struct timespec from, struct timespec to) {
+    return (double)(to.tv_sec - from.tv_sec) + (double)(to.tv_nsec - from.tv_nsec) / 1000000000.0;
+}
+
 LoadMetrics getLoadAverage() {
     LoadMetrics metrics = {0, 0, 0};
     FILE *fp = fopen("/proc/loadavg", "r");
@@ -78,18 +107,51 @@ static int read_cpu_counters(
 CpuMetrics getCpuMetrics() {
     CpuMetrics metrics = {0, 0, 0, 0, 0, 0, 0.0f};
 
-    unsigned long long user0 = 0, nice0 = 0, system0 = 0, idle0 = 0, iowait0 = 0;
     unsigned long long user1 = 0, nice1 = 0, system1 = 0, idle1 = 0, iowait1 = 0;
+    struct timespec ts_now = {0, 0};
+    (void)clock_gettime(CLOCK_MONOTONIC, &ts_now);
 
-    if (read_cpu_counters(&user0, &nice0, &system0, &idle0, &iowait0) < 0) {
+    if (read_cpu_counters(&user1, &nice1, &system1, &idle1, &iowait1) < 0) {
         perror("fopen");
         return metrics;
     }
 
-    usleep(100000); // 100ms sample window for CPU delta
+    if (!cpu_baseline.initialized) {
+        cpu_baseline.initialized = 1;
+        cpu_baseline.user = user1;
+        cpu_baseline.nice = nice1;
+        cpu_baseline.system = system1;
+        cpu_baseline.idle = idle1;
+        cpu_baseline.iowait = iowait1;
+        cpu_baseline.ts = ts_now;
+        usleep(CPU_SAMPLE_WINDOW_US);
 
-    if (read_cpu_counters(&user1, &nice1, &system1, &idle1, &iowait1) < 0) {
-        perror("fopen");
+        if (read_cpu_counters(&user1, &nice1, &system1, &idle1, &iowait1) < 0) {
+            perror("fopen");
+            return metrics;
+        }
+        (void)clock_gettime(CLOCK_MONOTONIC, &ts_now);
+    } else {
+        double since_last = elapsed_seconds(cpu_baseline.ts, ts_now);
+        if (since_last < ((double)CPU_MIN_REFRESH_MS / 1000.0)) {
+            return cpu_cached_metrics;
+        }
+    }
+
+    unsigned long long user0 = cpu_baseline.user;
+    unsigned long long nice0 = cpu_baseline.nice;
+    unsigned long long system0 = cpu_baseline.system;
+    unsigned long long idle0 = cpu_baseline.idle;
+    unsigned long long iowait0 = cpu_baseline.iowait;
+
+    cpu_baseline.user = user1;
+    cpu_baseline.nice = nice1;
+    cpu_baseline.system = system1;
+    cpu_baseline.idle = idle1;
+    cpu_baseline.iowait = iowait1;
+    cpu_baseline.ts = ts_now;
+
+    if (user1 < user0 || nice1 < nice0 || system1 < system0 || idle1 < idle0 || iowait1 < iowait0) {
         return metrics;
     }
 
@@ -109,6 +171,7 @@ CpuMetrics getCpuMetrics() {
 
     metrics.busy = delta_busy;
     metrics.busyPercent = (delta_total > 0) ? ((float)delta_busy / (float)delta_total) * 100.0f : 0.0f;
+    cpu_cached_metrics = metrics;
 
     return metrics;
 }
@@ -213,30 +276,41 @@ static int read_diskstats_totals(unsigned long long *read_sectors, unsigned long
 DiskMetrics getDiskMetrics() {
     DiskMetrics metrics = {0, 0, 0.0f, 0.0f, 0.0f}; // initializing with zeros to clean garbage data.
 
-    unsigned long long read_before = 0;
-    unsigned long long write_before = 0;
     unsigned long long read_after = 0;
     unsigned long long write_after = 0;
 
-    struct timespec ts_before = {0, 0};
     struct timespec ts_after = {0, 0};
-
-    if (read_diskstats_totals(&read_before, &write_before) < 0) {
-        perror("fopen");
-        return metrics;
-    }
-    (void)clock_gettime(CLOCK_MONOTONIC, &ts_before);
-
-    usleep(200000); // 200ms sample window for quick throughput glance
 
     if (read_diskstats_totals(&read_after, &write_after) < 0) {
         perror("fopen");
         return metrics;
     }
-    (void)clock_gettime(CLOCK_MONOTONIC, &ts_after); // CLOCK_MONOTONIC is unaffected by system time changes, ideal for measuring elapsed time
+    (void)clock_gettime(CLOCK_MONOTONIC, &ts_after);
 
-    unsigned long long read_delta = (read_after >= read_before) ? (read_after - read_before) : 0; // handle potential counter reset or overflow by treating negative deltas as zero
-    unsigned long long write_delta = (write_after >= write_before) ? (write_after - write_before) : 0; // same but write_delta instead
+    if (!disk_baseline.initialized) {
+        disk_baseline.initialized = 1;
+        disk_baseline.read_sectors = read_after;
+        disk_baseline.write_sectors = write_after;
+        disk_baseline.ts = ts_after;
+        usleep(DISK_SAMPLE_WINDOW_US);
+
+        if (read_diskstats_totals(&read_after, &write_after) < 0) {
+            perror("fopen");
+            return metrics;
+        }
+        (void)clock_gettime(CLOCK_MONOTONIC, &ts_after);
+    }
+
+    unsigned long long read_before = disk_baseline.read_sectors;
+    unsigned long long write_before = disk_baseline.write_sectors;
+    struct timespec ts_before = disk_baseline.ts;
+
+    disk_baseline.read_sectors = read_after;
+    disk_baseline.write_sectors = write_after;
+    disk_baseline.ts = ts_after;
+
+    unsigned long long read_delta = (read_after >= read_before) ? (read_after - read_before) : 0;
+    unsigned long long write_delta = (write_after >= write_before) ? (write_after - write_before) : 0;
 
     metrics.readSectors = read_delta;
     metrics.writeSectors = write_delta;
