@@ -30,27 +30,33 @@ char* parseRequestPath(const char *request) {
     return path;
 }
 
-int buildJsonResponse(char *buffer, int buffer_size, LoadMetrics metrics, MemoryMetrics memMetrics, CpuMetrics cpuMetrics, DiskMetrics diskMetrics) {
+int buildJsonResponse(char *buffer, int buffer_size, const SystemMetrics *metrics) {
+    if (metrics == NULL) {
+        return -1;
+    }
+
     return snprintf(buffer, buffer_size,
-        "{\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f,\"diskReadMBps\":%.2f,\"diskWriteMBps\":%.2f,\"diskTotalMBps\":%.2f}",
-        metrics.load1,
-        metrics.load5,
-        metrics.load15,
-        memMetrics.MemTotal,
-        memMetrics.MemFree,
-        memMetrics.MemAvailable,
-        memMetrics.memUsed,
-        memMetrics.memUsedPercent,
-        cpuMetrics.user,
-        cpuMetrics.nice,
-        cpuMetrics.system,
-        cpuMetrics.idle,
-        cpuMetrics.iowait,
-        cpuMetrics.busy,
-        cpuMetrics.busyPercent,
-        diskMetrics.readMBps,
-        diskMetrics.writeMBps,
-        diskMetrics.totalMBps);
+        "{\"sampleTsMs\":%llu,\"sampleAgeMs\":%llu,\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f,\"diskReadMBps\":%.2f,\"diskWriteMBps\":%.2f,\"diskTotalMBps\":%.2f}",
+        (unsigned long long)metrics->sampleTsMs,
+        (unsigned long long)metrics->sampleAgeMs,
+        metrics->load.load1,
+        metrics->load.load5,
+        metrics->load.load15,
+        metrics->memory.MemTotal,
+        metrics->memory.MemFree,
+        metrics->memory.MemAvailable,
+        metrics->memory.memUsed,
+        metrics->memory.memUsedPercent,
+        metrics->cpu.user,
+        metrics->cpu.nice,
+        metrics->cpu.system,
+        metrics->cpu.idle,
+        metrics->cpu.iowait,
+        metrics->cpu.busy,
+        metrics->cpu.busyPercent,
+        metrics->disk.readMBps,
+        metrics->disk.writeMBps,
+        metrics->disk.totalMBps);
 }
 
 int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type) {

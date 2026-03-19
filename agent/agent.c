@@ -19,6 +19,11 @@
 // For simplicity, this server handles one request at a time and does not implement concurrency
 
 int socketServer(){
+    if (initMetricsSampler() != 0) {
+        perror("initMetricsSampler");
+        return 1;
+    }
+
     int server_socket;
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) { // In standard POSIX sockets, socket() returns -1 on error.
@@ -81,11 +86,14 @@ int socketServer(){
             (void)sendHttpResponse(client_socket, 200, "OK", "OK", "text/plain");
         }
         else if (path && strcmp(path, "/status") == 0) { // If the requested path is /status, we gather the system metrics and build a JSON response
-            LoadMetrics metrics = getLoadAverage(); // Get the system load average metrics
-            MemoryMetrics memMetrics = getMemoryMetrics(); // Get the memory metrics
-            CpuMetrics cpuMetrics = getCpuMetrics(); // Get the CPU usage metrics
-            DiskMetrics diskMetrics = getDiskMetrics(); // Get disk throughput metrics
-            int body_len = buildJsonResponse(body, sizeof(body), metrics, memMetrics, cpuMetrics, diskMetrics); // Build a JSON response string containing the metrics, which will be sent back to the client
+            SystemMetrics snapshot = {0};
+            if (getMetricsSnapshot(&snapshot) != 0) {
+                (void)sendHttpResponse(client_socket, 500, "Internal Server Error", "Internal Server Error", "text/plain");
+                close(client_socket);
+                continue;
+            }
+
+            int body_len = buildJsonResponse(body, sizeof(body), &snapshot); // Build a JSON response string containing the metrics, which will be sent back to the client
             if (body_len > 0 && body_len < (int)sizeof(body)) {
                 (void)sendHttpResponse(client_socket, 200, "OK", body, "application/json"); // Send the HTTP response with the JSON body and the appropriate content type header
             } else {
@@ -99,6 +107,7 @@ int socketServer(){
     }
 
     close(server_socket);
+    stopMetricsSampler();
     return 0;
 }
 

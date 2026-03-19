@@ -1,6 +1,8 @@
 #ifndef METRICS_H
 #define METRICS_H
 
+#include <stdint.h>
+
 // We will define a struct to hold the load average metrics, including the 1-minute, 5-minute, and 15-minute load averages
 typedef struct {
     float load1;
@@ -45,5 +47,18 @@ typedef struct {
 } DiskMetrics;
 
 DiskMetrics getDiskMetrics();
+
+typedef struct {
+    LoadMetrics load;
+    MemoryMetrics memory;
+    CpuMetrics cpu;
+    DiskMetrics disk;
+    uint64_t sampleTsMs;
+    uint64_t sampleAgeMs;
+} SystemMetrics;
+
+int initMetricsSampler(void);
+void stopMetricsSampler(void);
+int getMetricsSnapshot(SystemMetrics *out_metrics);
 
 #endif

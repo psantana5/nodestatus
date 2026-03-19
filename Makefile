@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
+AGENT_FLAGS = -pthread
 CLI_FLAGS = -pthread
 BINDIR = bin
 
@@ -15,7 +16,7 @@ $(BINDIR):
 	mkdir -p $(BINDIR)
 
 $(AGENT_TARGET): $(BINDIR) $(AGENT_SOURCES)
-	$(CC) $(CFLAGS) $(AGENT_SOURCES) -o $(AGENT_TARGET)
+	$(CC) $(CFLAGS) $(AGENT_FLAGS) $(AGENT_SOURCES) -o $(AGENT_TARGET)
 
 $(CLI_TARGET): $(BINDIR) $(CLI_SOURCES)
 	$(CC) $(CFLAGS) $(CLI_FLAGS) $(CLI_SOURCES) -o $(CLI_TARGET)
