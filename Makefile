@@ -1,7 +1,7 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
-AGENT_FLAGS = -pthread
-CLI_FLAGS = -pthread
+CFLAGS = -Wall -Wextra -O2
+AGENT_FLAGS = -pthread -O2
+CLI_FLAGS = -pthread -O2
 BINDIR = bin
 
 AGENT_SOURCES = agent/agent.c agent/metrics.c agent/http.c
@@ -34,3 +34,4 @@ run-cli: $(CLI_TARGET)
 	$(CLI_TARGET)
 
 .PHONY: all clean run-agent cli run-cli
+.DEFAULT_GOAL := all
