@@ -58,17 +58,19 @@ For example, the command `nodectl status` will output a table like this one:
 | node02 | 87% | 84% | 4.1  |
 | node03 | 12% | 35% | 0.2  |
 
-### Node groups
+### Node groups (YAML inventory)
 
-Nodes can be grouped in `config/nodes.txt` using section headers:
+Nodes are grouped in `config/inventory.yaml`:
 
-```
-[HPC]
-host1
-host2
-
-[LAB]
-host3
+```yaml
+groups:
+  HPC:
+    hosts:
+      - host1
+      - host2
+  LAB:
+    hosts:
+      - host3
 ```
 
 Commands:
@@ -76,6 +78,11 @@ Commands:
 - `nodectl status HPC` → only nodes in group `HPC`
 - `nodectl watch` → continuous refresh for all nodes
 - `nodectl watch HPC` → continuous refresh for group `HPC`
+
+YAML parser scope in this version is intentionally simple:
+- Supports only: `groups -> <group> -> hosts -> - <host>`
+- No nested children beyond that structure
+- No external YAML library is used
 
 ---
 

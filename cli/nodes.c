@@ -24,7 +24,100 @@ static void trim_whitespace(char *s) {
     }
 }
 
+static int yaml_indent_spaces(const char *line) {
+    int indent = 0;
+    while (*line == ' ') {
+        indent++;
+        line++;
+    }
+    return indent;
+}
+
+static int loadNodesByGroupFromYaml(const char *filename, Node nodes[], int max_nodes, const char *group_filter) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        return -1;
+    }
+
+    char line[256];
+    char current_group[MAX_GROUPNAME] = "";
+    int in_groups_section = 0;
+    int in_hosts_list = 0;
+    int count = 0;
+
+    while (fgets(line, sizeof(line), file) && count < max_nodes) {
+        line[strcspn(line, "\r\n")] = 0;
+
+        int indent = yaml_indent_spaces(line);
+        char *content = line + indent;
+        trim_whitespace(content);
+
+        if (content[0] == '\0' || content[0] == '#') {
+            continue;
+        }
+
+        if (indent == 0 && strcmp(content, "groups:") == 0) {
+            in_groups_section = 1;
+            in_hosts_list = 0;
+            current_group[0] = '\0';
+            continue;
+        }
+
+        if (!in_groups_section) {
+            continue;
+        }
+
+        if (indent == 2) {
+            size_t len = strlen(content);
+            if (len > 1 && content[len - 1] == ':') {
+                content[len - 1] = '\0';
+                trim_whitespace(content);
+                strncpy(current_group, content, MAX_GROUPNAME - 1);
+                current_group[MAX_GROUPNAME - 1] = '\0';
+                in_hosts_list = 0;
+            }
+            continue;
+        }
+
+        if (indent == 4 && strcmp(content, "hosts:") == 0) {
+            in_hosts_list = 1;
+            continue;
+        }
+
+        if (indent == 6 && in_hosts_list && content[0] == '-') {
+            char *host = content + 1;
+            trim_whitespace(host);
+            if (host[0] == '\0') {
+                continue;
+            }
+
+            if (group_filter && strcmp(group_filter, current_group) != 0) {
+                continue;
+            }
+
+            strncpy(nodes[count].hostname, host, MAX_HOSTNAME - 1);
+            nodes[count].hostname[MAX_HOSTNAME - 1] = '\0';
+            strncpy(nodes[count].group, current_group, MAX_GROUPNAME - 1);
+            nodes[count].group[MAX_GROUPNAME - 1] = '\0';
+            count++;
+            continue;
+        }
+    }
+
+    fclose(file);
+    return count;
+}
+
 int loadNodesByGroup(const char *filename, Node nodes[], int max_nodes, const char *group_filter) {
+    if (strstr(filename, ".yaml") || strstr(filename, ".yml")) {
+        int yaml_count = loadNodesByGroupFromYaml(filename, nodes, max_nodes, group_filter);
+        if (yaml_count >= 0) {
+            return yaml_count;
+        }
+        perror("fopen");
+        return -1;
+    }
+
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("fopen");

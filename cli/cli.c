@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int nodeCount = loadNodesByGroup("config/nodes.txt", nodes, MAX_NODES, group_filter);
+    int nodeCount = loadNodesByGroup(INVENTORY_FILE, nodes, MAX_NODES, group_filter);
     if (nodeCount <= 0) {
         if (group_filter) {
             printf("No nodes found for group '%s'\n", group_filter);
