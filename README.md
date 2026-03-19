@@ -86,6 +86,9 @@ Commands:
 - `nodectl status HPC` → only nodes in group `HPC`
 - `nodectl watch` → continuous refresh for all nodes
 - `nodectl watch HPC` → continuous refresh for group `HPC`
+- `nodectl status --sort host|resp|state` → choose table sort mode (default: `state`)
+- `nodectl watch --sort host|resp|state` → keep watch sorted by selected mode
+- `nodectl status --no-color` → disable ANSI color cues
 
 YAML parser scope in this version is intentionally simple:
 - Supports only: `groups -> <group> -> hosts -> - <host>`

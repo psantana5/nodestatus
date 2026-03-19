@@ -14,6 +14,7 @@ typedef struct {
     float disk_mb_s;
 } NodeStatus;
 
+void setTableColorEnabled(int enabled);
 void printTableHeader();
 void printTableRow(const NodeStatus *status);
 void printTableFooter(int ok_count, int fail_count);

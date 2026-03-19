@@ -2,6 +2,34 @@
 #include <string.h>
 #include "table.h"
 
+static int table_color_enabled = 1;
+
+static const char *color_for_state(FetchState state) {
+    switch (state) {
+        case FETCH_OK:
+            return "\033[32m";
+        case FETCH_TIMEOUT:
+        case FETCH_DNS_ERROR:
+        case FETCH_CONNECT_ERROR:
+        case FETCH_HTTP_ERROR:
+        case FETCH_PARSE_ERROR:
+        case FETCH_IO_ERROR:
+            return "\033[31m";
+        default:
+            return "\033[33m";
+    }
+}
+
+static const char *color_for_latency(int latency_ms) {
+    if (latency_ms <= 100) {
+        return "\033[32m";
+    }
+    if (latency_ms <= 300) {
+        return "\033[33m";
+    }
+    return "\033[31m";
+}
+
 static const char *fetch_state_to_string(FetchState state) {
     switch (state) {
         case FETCH_OK:
@@ -23,18 +51,31 @@ static const char *fetch_state_to_string(FetchState state) {
     }
 }
 
+void setTableColorEnabled(int enabled) {
+    table_color_enabled = enabled ? 1 : 0;
+}
+
 void printTableHeader() {
     printf("%-20s %-11s %-8s %-8s %-8s %-8s %-11s\n", "HOST", "STATE", "RESP(ms)", "CPU(%)", "MEM(%)", "LOAD", "DISK (MB/s)");
     printf("------------------------------------------------------------------------------------\n");
 }
 
 void printTableRow(const NodeStatus *status) {
+    const char *state_str = fetch_state_to_string(status->state);
+    const char *state_color = table_color_enabled ? color_for_state(status->state) : "";
+    const char *latency_color = table_color_enabled ? color_for_latency(status->latency_ms) : "";
+    const char *color_reset = table_color_enabled ? "\033[0m" : "";
+
     if (status->has_metrics) {
         printf(
-            "%-20s %-11s %8d %6.1f%% %6.1f%% %7.2f %7.2f\n",
+            "%-20s %s%-11s%s %s%8d%s %6.1f%% %6.1f%% %7.2f %7.2f\n",
             status->hostname,
-            fetch_state_to_string(status->state),
+            state_color,
+            state_str,
+            color_reset,
+            latency_color,
             status->latency_ms,
+            color_reset,
             status->cpu_percent,
             status->mem_percent,
             status->load,
@@ -44,10 +85,14 @@ void printTableRow(const NodeStatus *status) {
     }
 
     printf(
-        "%-20s %-11s %8d %-8s %-8s %-8s %-11s\n",
+        "%-20s %s%-11s%s %s%8d%s %-8s %-8s %-8s %-11s\n",
         status->hostname,
-        fetch_state_to_string(status->state),
+        state_color,
+        state_str,
+        color_reset,
+        latency_color,
         status->latency_ms,
+        color_reset,
         "N/A",
         "N/A",
         "N/A",

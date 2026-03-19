@@ -4,7 +4,7 @@
 #define MAX_NODES 128 // Max num of nodes to load from file. Also maxThreads value since it's 1 worker per node.
 #define MAX_HOSTNAME 256
 #define MAX_GROUPNAME 64
-#define RESPONSE_BUFFER_SIZE 2048
+#define RESPONSE_BUFFER_SIZE 2048 // HTTP response buffer for /status endpoint.
 #define NODE_CONNECT_TIMEOUT_MS 500
 #define NODE_WATCH_INTERVAL_MS 1000
 #define NODE_AGENT_DEFAULT_PORT 9002
