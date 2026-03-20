@@ -36,7 +36,13 @@ int buildJsonResponse(char *buffer, int buffer_size, const SystemMetrics *metric
     }
 
     return snprintf(buffer, buffer_size,
-        "{\"sampleTsMs\":%llu,\"sampleAgeMs\":%llu,\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f,\"diskReadMBps\":%.2f,\"diskWriteMBps\":%.2f,\"diskTotalMBps\":%.2f}",
+        "{\"sampleTsMs\":%llu,\"sampleAgeMs\":%llu,"
+        "\"load1\":%.2f,\"load5\":%.2f,\"load15\":%.2f,"
+        "\"memTotal\":%lu,\"memFree\":%lu,\"memAvailable\":%lu,\"memUsed\":%lu,\"memUsedPercent\":%.2f,"
+        "\"swapTotal\":%lu,\"swapFree\":%lu,\"swapUsed\":%lu,\"swapUsedPercent\":%.2f,"
+        "\"cpuUser\":%llu,\"cpuNice\":%llu,\"cpuSystem\":%llu,\"cpuIdle\":%llu,\"cpuIOwait\":%llu,\"cpuBusy\":%llu,\"cpuBusyPercent\":%.2f,"
+        "\"diskReadMBps\":%.2f,\"diskWriteMBps\":%.2f,\"diskTotalMBps\":%.2f,\"diskReadIOPS\":%.2f,\"diskWriteIOPS\":%.2f,\"diskTotalIOPS\":%.2f,"
+        "\"netRxMBps\":%.2f,\"netTxMBps\":%.2f,\"netTotalMBps\":%.2f}",
         (unsigned long long)metrics->sampleTsMs,
         (unsigned long long)metrics->sampleAgeMs,
         metrics->load.load1,
@@ -47,6 +53,10 @@ int buildJsonResponse(char *buffer, int buffer_size, const SystemMetrics *metric
         metrics->memory.MemAvailable,
         metrics->memory.memUsed,
         metrics->memory.memUsedPercent,
+        metrics->memory.SwapTotal,
+        metrics->memory.SwapFree,
+        metrics->memory.SwapUsed,
+        metrics->memory.swapUsedPercent,
         metrics->cpu.user,
         metrics->cpu.nice,
         metrics->cpu.system,
@@ -56,7 +66,13 @@ int buildJsonResponse(char *buffer, int buffer_size, const SystemMetrics *metric
         metrics->cpu.busyPercent,
         metrics->disk.readMBps,
         metrics->disk.writeMBps,
-        metrics->disk.totalMBps);
+        metrics->disk.totalMBps,
+        metrics->disk.readIOPS,
+        metrics->disk.writeIOPS,
+        metrics->disk.totalIOPS,
+        metrics->network.rxMBps,
+        metrics->network.txMBps,
+        metrics->network.totalMBps);
 }
 
 int sendHttpResponse(int client_socket, int status_code, const char *status_text, const char *body, const char *content_type, int keep_alive) {

@@ -90,6 +90,44 @@ Commands:
 - `nodectl watch --sort host|resp|state` → keep watch sorted by selected mode
 - `nodectl status --no-color` → disable ANSI color cues
 
+
+Options:
+- `--sort host|resp|state`: Sort nodes by hostname, response time (default: state-health)
+- `--no-color`: Disable ANSI color codes
+
+**Drill-Down Views** (for resource-specific troubleshooting):
+- `--cpu`: Show detailed CPU breakdown (user%, nice%, sys%, idle%, iowait%, busy%)
+- `--mem`: Show detailed memory info (total, available, mem%, swap total, swap used, swap%)
+- `--disk`: Show detailed disk I/O (read/write MB/s, read/write IOPS, total IOPS)
+- `--net`: Show detailed network stats (RX/TX MB/s, total bandwidth)
+
+Usage examples:
+```bash
+# Default overview (simple, fast)
+./bin/cli status
+
+# Sort by response time and disable colors
+./bin/cli status --sort resp --no-color
+
+# Watch mode with auto-refresh
+./bin/cli watch
+
+# Drill down into CPU metrics for troubleshooting
+./bin/cli status --cpu
+
+# Drill down into memory metrics (includes swap)
+./bin/cli status --mem
+
+# Check disk I/O and IOPS
+./bin/cli status --disk
+
+# Monitor network bandwidth
+./bin/cli status --net
+
+# Combine with watch mode for real-time drill-down
+./bin/cli watch --mem
+```
+
 YAML parser scope in this version is intentionally simple:
 - Supports only: `groups -> <group> -> hosts -> - <host>`
 - Host entries may be `host` or `host:port`

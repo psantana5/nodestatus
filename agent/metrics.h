@@ -19,6 +19,10 @@ typedef struct {
     unsigned long MemAvailable;
     unsigned long memUsed;
     float memUsedPercent;
+    unsigned long SwapTotal;
+    unsigned long SwapFree;
+    unsigned long SwapUsed;
+    float swapUsedPercent;
 } MemoryMetrics;
 
 MemoryMetrics getMemoryMetrics();
@@ -41,18 +45,34 @@ CpuMetrics getCpuMetrics();
 typedef struct {
     unsigned long long readSectors;
     unsigned long long writeSectors;
+    unsigned long long readOps;
+    unsigned long long writeOps;
     float readMBps;
     float writeMBps;
     float totalMBps;
+    float readIOPS;
+    float writeIOPS;
+    float totalIOPS;
 } DiskMetrics;
 
 DiskMetrics getDiskMetrics();
+
+typedef struct {
+    unsigned long long rxBytes;
+    unsigned long long txBytes;
+    float rxMBps;
+    float txMBps;
+    float totalMBps;
+} NetworkMetrics;
+
+NetworkMetrics getNetworkMetrics();
 
 typedef struct {
     LoadMetrics load;
     MemoryMetrics memory;
     CpuMetrics cpu;
     DiskMetrics disk;
+    NetworkMetrics network;
     uint64_t sampleTsMs;
     uint64_t sampleAgeMs;
 } SystemMetrics;

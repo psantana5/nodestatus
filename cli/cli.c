@@ -25,6 +25,14 @@ typedef enum {
     SORT_BY_STATE
 } SortMode;
 
+typedef enum {
+    VIEW_DEFAULT = 0,
+    VIEW_CPU,
+    VIEW_MEM,
+    VIEW_DISK,
+    VIEW_NET
+} ViewMode;
+
 static const char *extract_json_body(const char *http_response) {
     const char *body = strstr(http_response, "\r\n\r\n");
     if (!body) {
@@ -257,6 +265,154 @@ static void render_status_table(const Node nodes[], int nodeCount, int timeout_m
     printTableFooter(ok_count, fail_count);
 }
 
+static void render_cpu_detail(Node *nodes, int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode) {
+    CpuDetailStatus statuses[MAX_NODES];
+    
+    for (int i = 0; i < nodeCount; i++) {
+        memset(&statuses[i], 0, sizeof(CpuDetailStatus));
+        snprintf(statuses[i].hostname, sizeof(statuses[i].hostname), "%s:%d", 
+                 nodes[i].hostname, nodes[i].port);
+        
+        FetchResult result = fetchStatusWithConnection(nodes[i].hostname, nodes[i].port, timeout_ms, 
+                                                        connections ? &connections[i].sockfd : NULL);
+        statuses[i].state = result.state;
+        
+        if (result.state == FETCH_OK && result.bytes_received > 0) {
+            const char *json = extract_json_body(result.response);
+            if (json && parseJsonCpuDetail(json, &statuses[i]) == 0) {
+                statuses[i].has_metrics = 1;
+            }
+        }
+    }
+
+    int ok_count = 0;
+    int fail_count = 0;
+    for (int i = 0; i < nodeCount; i++) {
+        if (statuses[i].has_metrics) {
+            ok_count++;
+        } else {
+            fail_count++;
+        }
+    }
+
+    printCpuDetailHeader();
+    for (int i = 0; i < nodeCount; i++) {
+        printCpuDetailRow(&statuses[i]);
+    }
+    printTableFooter(ok_count, fail_count);
+}
+
+static void render_mem_detail(Node *nodes, int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode) {
+    MemDetailStatus statuses[MAX_NODES];
+    
+    for (int i = 0; i < nodeCount; i++) {
+        memset(&statuses[i], 0, sizeof(MemDetailStatus));
+        snprintf(statuses[i].hostname, sizeof(statuses[i].hostname), "%s:%d", 
+                 nodes[i].hostname, nodes[i].port);
+        
+        FetchResult result = fetchStatusWithConnection(nodes[i].hostname, nodes[i].port, timeout_ms, 
+                                                        connections ? &connections[i].sockfd : NULL);
+        statuses[i].state = result.state;
+        
+        if (result.state == FETCH_OK && result.bytes_received > 0) {
+            const char *json = extract_json_body(result.response);
+            if (json && parseJsonMemDetail(json, &statuses[i]) == 0) {
+                statuses[i].has_metrics = 1;
+            }
+        }
+    }
+
+    int ok_count = 0;
+    int fail_count = 0;
+    for (int i = 0; i < nodeCount; i++) {
+        if (statuses[i].has_metrics) {
+            ok_count++;
+        } else {
+            fail_count++;
+        }
+    }
+
+    printMemDetailHeader();
+    for (int i = 0; i < nodeCount; i++) {
+        printMemDetailRow(&statuses[i]);
+    }
+    printTableFooter(ok_count, fail_count);
+}
+
+static void render_disk_detail(Node *nodes, int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode) {
+    DiskDetailStatus statuses[MAX_NODES];
+    
+    for (int i = 0; i < nodeCount; i++) {
+        memset(&statuses[i], 0, sizeof(DiskDetailStatus));
+        snprintf(statuses[i].hostname, sizeof(statuses[i].hostname), "%s:%d", 
+                 nodes[i].hostname, nodes[i].port);
+        
+        FetchResult result = fetchStatusWithConnection(nodes[i].hostname, nodes[i].port, timeout_ms, 
+                                                        connections ? &connections[i].sockfd : NULL);
+        statuses[i].state = result.state;
+        
+        if (result.state == FETCH_OK && result.bytes_received > 0) {
+            const char *json = extract_json_body(result.response);
+            if (json && parseJsonDiskDetail(json, &statuses[i]) == 0) {
+                statuses[i].has_metrics = 1;
+            }
+        }
+    }
+
+    int ok_count = 0;
+    int fail_count = 0;
+    for (int i = 0; i < nodeCount; i++) {
+        if (statuses[i].has_metrics) {
+            ok_count++;
+        } else {
+            fail_count++;
+        }
+    }
+
+    printDiskDetailHeader();
+    for (int i = 0; i < nodeCount; i++) {
+        printDiskDetailRow(&statuses[i]);
+    }
+    printTableFooter(ok_count, fail_count);
+}
+
+static void render_net_detail(Node *nodes, int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode) {
+    NetDetailStatus statuses[MAX_NODES];
+    
+    for (int i = 0; i < nodeCount; i++) {
+        memset(&statuses[i], 0, sizeof(NetDetailStatus));
+        snprintf(statuses[i].hostname, sizeof(statuses[i].hostname), "%s:%d", 
+                 nodes[i].hostname, nodes[i].port);
+        
+        FetchResult result = fetchStatusWithConnection(nodes[i].hostname, nodes[i].port, timeout_ms, 
+                                                        connections ? &connections[i].sockfd : NULL);
+        statuses[i].state = result.state;
+        
+        if (result.state == FETCH_OK && result.bytes_received > 0) {
+            const char *json = extract_json_body(result.response);
+            if (json && parseJsonNetDetail(json, &statuses[i]) == 0) {
+                statuses[i].has_metrics = 1;
+            }
+        }
+    }
+
+    int ok_count = 0;
+    int fail_count = 0;
+    for (int i = 0; i < nodeCount; i++) {
+        if (statuses[i].has_metrics) {
+            ok_count++;
+        } else {
+            fail_count++;
+        }
+    }
+
+    printNetDetailHeader();
+    for (int i = 0; i < nodeCount; i++) {
+        printNetDetailRow(&statuses[i]);
+    }
+    printTableFooter(ok_count, fail_count);
+}
+
 int main(int argc, char *argv[])
 {
     Node nodes[MAX_NODES];
@@ -264,6 +420,7 @@ int main(int argc, char *argv[])
     const char *group_filter = NULL;
     int watch_mode = 0;
     SortMode sort_mode = SORT_BY_STATE;
+    ViewMode view_mode = VIEW_DEFAULT;
     int colors_enabled = 1;
 
     if (argc == 1) {
@@ -275,9 +432,25 @@ int main(int argc, char *argv[])
                 colors_enabled = 0;
                 continue;
             }
+            if (strcmp(argv[i], "--cpu") == 0) {
+                view_mode = VIEW_CPU;
+                continue;
+            }
+            if (strcmp(argv[i], "--mem") == 0) {
+                view_mode = VIEW_MEM;
+                continue;
+            }
+            if (strcmp(argv[i], "--disk") == 0) {
+                view_mode = VIEW_DISK;
+                continue;
+            }
+            if (strcmp(argv[i], "--net") == 0) {
+                view_mode = VIEW_NET;
+                continue;
+            }
             if (strcmp(argv[i], "--sort") == 0) {
                 if (i + 1 >= argc || parse_sort_mode(argv[i + 1], &sort_mode) != 0) {
-                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--no-color]\n", argv[0]);
+                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
                     return 1;
                 }
                 i++;
@@ -285,7 +458,7 @@ int main(int argc, char *argv[])
             }
             if (strncmp(argv[i], "--sort=", 7) == 0) {
                 if (parse_sort_mode(argv[i] + 7, &sort_mode) != 0) {
-                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--no-color]\n", argv[0]);
+                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
                     return 1;
                 }
                 continue;
@@ -294,11 +467,11 @@ int main(int argc, char *argv[])
                 group_filter = argv[i];
                 continue;
             }
-            printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--no-color]\n", argv[0]);
+            printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
             return 1;
         }
     } else {
-        printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--no-color]\n", argv[0]);
+        printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
         return 1;
     }
 
@@ -320,7 +493,24 @@ int main(int argc, char *argv[])
     }
 
     if (!watch_mode) {
-        render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+        switch (view_mode) {
+            case VIEW_CPU:
+                render_cpu_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                break;
+            case VIEW_MEM:
+                render_mem_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                break;
+            case VIEW_DISK:
+                render_disk_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                break;
+            case VIEW_NET:
+                render_net_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                break;
+            case VIEW_DEFAULT:
+            default:
+                render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                break;
+        }
         return 0;
     }
 
@@ -332,7 +522,25 @@ int main(int argc, char *argv[])
         } else {
             printf("nodectl watch (refresh every %d ms, sort=%s)\n\n", NODE_WATCH_INTERVAL_MS, sort_mode_to_string(sort_mode));
         }
-        render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+        
+        switch (view_mode) {
+            case VIEW_CPU:
+                render_cpu_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                break;
+            case VIEW_MEM:
+                render_mem_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                break;
+            case VIEW_DISK:
+                render_disk_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                break;
+            case VIEW_NET:
+                render_net_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                break;
+            case VIEW_DEFAULT:
+            default:
+                render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                break;
+        }
 
         struct timespec delay = {
             NODE_WATCH_INTERVAL_MS / 1000,

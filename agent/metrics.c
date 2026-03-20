@@ -28,7 +28,15 @@ typedef struct {
     int initialized;
     unsigned long long readSectors;
     unsigned long long writeSectors;
+    unsigned long long readOps;
+    unsigned long long writeOps;
 } DiskCounters;
+
+typedef struct {
+    int initialized;
+    unsigned long long rxBytes;
+    unsigned long long txBytes;
+} NetworkCounters;
 
 static pthread_t sampler_thread;
 static int sampler_running = 0;
@@ -36,7 +44,8 @@ static pthread_mutex_t sampler_lock = PTHREAD_MUTEX_INITIALIZER;
 static SystemMetrics latest_metrics = {0};
 static int cpu_prev_initialized = 0;
 static CpuCounters cpu_prev = {0, 0, 0, 0, 0};
-static DiskCounters disk_prev = {0, 0, 0};
+static DiskCounters disk_prev = {0, 0, 0, 0, 0};
+static NetworkCounters net_prev = {0, 0, 0};
 static EmaState cpu_ema = {0, 0.0f};
 static uint64_t last_sample_ms = 0;
 
@@ -84,7 +93,7 @@ LoadMetrics getLoadAverage() {
 }
 
 MemoryMetrics getMemoryMetrics() {
-    MemoryMetrics metrics = {0, 0, 0, 0, 0};
+    MemoryMetrics metrics = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     FILE *fp = fopen("/proc/meminfo", "r");
     if (fp == NULL) {
         perror("fopen");
@@ -102,10 +111,18 @@ MemoryMetrics getMemoryMetrics() {
         if (sscanf(line, "MemAvailable: %lu kB", &metrics.MemAvailable) == 1) {
             continue;
         }
+        if (sscanf(line, "SwapTotal: %lu kB", &metrics.SwapTotal) == 1) {
+            continue;
+        }
+        if (sscanf(line, "SwapFree: %lu kB", &metrics.SwapFree) == 1) {
+            continue;
+        }
     }
 
     metrics.memUsed = (metrics.MemTotal >= metrics.MemAvailable) ? (metrics.MemTotal - metrics.MemAvailable) : 0;
     metrics.memUsedPercent = (metrics.MemTotal > 0) ? ((float)metrics.memUsed / metrics.MemTotal) * 100.0f : 0.0f;
+    metrics.SwapUsed = (metrics.SwapTotal >= metrics.SwapFree) ? (metrics.SwapTotal - metrics.SwapFree) : 0;
+    metrics.swapUsedPercent = (metrics.SwapTotal > 0) ? ((float)metrics.SwapUsed / metrics.SwapTotal) * 100.0f : 0.0f;
     fclose(fp);
     return metrics;
 }
@@ -198,7 +215,7 @@ static int is_supported_disk_device(const char *name) {
     return 0;
 }
 
-static int read_diskstats_totals(unsigned long long *read_sectors, unsigned long long *write_sectors) {
+static int read_diskstats_totals(unsigned long long *read_sectors, unsigned long long *write_sectors, unsigned long long *read_ops, unsigned long long *write_ops) {
     FILE *fp = fopen("/proc/diskstats", "r");
     if (fp == NULL) {
         return -1;
@@ -206,6 +223,8 @@ static int read_diskstats_totals(unsigned long long *read_sectors, unsigned long
 
     unsigned long long read_total = 0;
     unsigned long long write_total = 0;
+    unsigned long long read_ops_total = 0;
+    unsigned long long write_ops_total = 0;
     char line[512];
 
     while (fgets(line, sizeof(line), fp)) {
@@ -253,19 +272,25 @@ static int read_diskstats_totals(unsigned long long *read_sectors, unsigned long
 
         read_total += sectors_read;
         write_total += sectors_written;
+        read_ops_total += reads_completed;
+        write_ops_total += writes_completed;
     }
 
     fclose(fp);
     *read_sectors = read_total;
     *write_sectors = write_total;
+    *read_ops = read_ops_total;
+    *write_ops = write_ops_total;
     return 0;
 }
 
 DiskMetrics getDiskMetrics() {
-    DiskMetrics metrics = {0, 0, 0.0f, 0.0f, 0.0f};
+    DiskMetrics metrics = {0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     unsigned long long read_now = 0;
     unsigned long long write_now = 0;
-    if (read_diskstats_totals(&read_now, &write_now) < 0) {
+    unsigned long long read_ops_now = 0;
+    unsigned long long write_ops_now = 0;
+    if (read_diskstats_totals(&read_now, &write_now, &read_ops_now, &write_ops_now) < 0) {
         perror("fopen");
         return metrics;
     }
@@ -274,19 +299,100 @@ DiskMetrics getDiskMetrics() {
         disk_prev.initialized = 1;
         disk_prev.readSectors = read_now;
         disk_prev.writeSectors = write_now;
+        disk_prev.readOps = read_ops_now;
+        disk_prev.writeOps = write_ops_now;
         return metrics;
     }
 
-    if (read_now < disk_prev.readSectors || write_now < disk_prev.writeSectors) {
+    if (read_now < disk_prev.readSectors || write_now < disk_prev.writeSectors ||
+        read_ops_now < disk_prev.readOps || write_ops_now < disk_prev.writeOps) {
         disk_prev.readSectors = read_now;
         disk_prev.writeSectors = write_now;
+        disk_prev.readOps = read_ops_now;
+        disk_prev.writeOps = write_ops_now;
         return metrics;
     }
 
     metrics.readSectors = read_now - disk_prev.readSectors;
     metrics.writeSectors = write_now - disk_prev.writeSectors;
+    metrics.readOps = read_ops_now - disk_prev.readOps;
+    metrics.writeOps = write_ops_now - disk_prev.writeOps;
     disk_prev.readSectors = read_now;
     disk_prev.writeSectors = write_now;
+    disk_prev.readOps = read_ops_now;
+    disk_prev.writeOps = write_ops_now;
+    return metrics;
+}
+
+static int read_net_dev_totals(unsigned long long *rx_bytes, unsigned long long *tx_bytes) {
+    FILE *fp = fopen("/proc/net/dev", "r");
+    if (fp == NULL) {
+        return -1;
+    }
+
+    unsigned long long rx_total = 0;
+    unsigned long long tx_total = 0;
+    char line[512];
+    int skip_header = 2;
+
+    while (fgets(line, sizeof(line), fp)) {
+        if (skip_header > 0) {
+            skip_header--;
+            continue;
+        }
+
+        char iface[64] = {0};
+        unsigned long long rx = 0, tx = 0;
+        unsigned long long dummy1, dummy2, dummy3, dummy4, dummy5, dummy6, dummy7;
+        unsigned long long dummy8, dummy9, dummy10, dummy11, dummy12, dummy13, dummy14;
+
+        int matched = sscanf(line, " %63[^:]: %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu",
+            iface, &rx, &dummy1, &dummy2, &dummy3, &dummy4, &dummy5, &dummy6, &dummy7,
+            &tx, &dummy8, &dummy9, &dummy10, &dummy11, &dummy12, &dummy13, &dummy14);
+
+        if (matched < 10) {
+            continue;
+        }
+
+        if (strcmp(iface, "lo") == 0) {
+            continue;
+        }
+
+        rx_total += rx;
+        tx_total += tx;
+    }
+
+    fclose(fp);
+    *rx_bytes = rx_total;
+    *tx_bytes = tx_total;
+    return 0;
+}
+
+NetworkMetrics getNetworkMetrics() {
+    NetworkMetrics metrics = {0, 0, 0.0f, 0.0f, 0.0f};
+    unsigned long long rx_now = 0;
+    unsigned long long tx_now = 0;
+    if (read_net_dev_totals(&rx_now, &tx_now) < 0) {
+        return metrics;
+    }
+
+    if (!net_prev.initialized) {
+        net_prev.initialized = 1;
+        net_prev.rxBytes = rx_now;
+        net_prev.txBytes = tx_now;
+        return metrics;
+    }
+
+    if (rx_now < net_prev.rxBytes || tx_now < net_prev.txBytes) {
+        net_prev.rxBytes = rx_now;
+        net_prev.txBytes = tx_now;
+        return metrics;
+    }
+
+    metrics.rxBytes = rx_now - net_prev.rxBytes;
+    metrics.txBytes = tx_now - net_prev.txBytes;
+    net_prev.rxBytes = rx_now;
+    net_prev.txBytes = tx_now;
     return metrics;
 }
 
@@ -298,6 +404,7 @@ static void sample_once(void) {
     sampled.memory = getMemoryMetrics();
     sampled.cpu = getCpuMetrics();
     sampled.disk = getDiskMetrics();
+    sampled.network = getNetworkMetrics();
 
     if (last_sample_ms != 0) {
         uint64_t delta_ms = now_ms - last_sample_ms;
@@ -306,10 +413,22 @@ static void sample_once(void) {
             sampled.disk.readMBps = ((float)sampled.disk.readSectors * 512.0f) / (1024.0f * 1024.0f) / seconds;
             sampled.disk.writeMBps = ((float)sampled.disk.writeSectors * 512.0f) / (1024.0f * 1024.0f) / seconds;
             sampled.disk.totalMBps = sampled.disk.readMBps + sampled.disk.writeMBps;
+            sampled.disk.readIOPS = (float)sampled.disk.readOps / seconds;
+            sampled.disk.writeIOPS = (float)sampled.disk.writeOps / seconds;
+            sampled.disk.totalIOPS = sampled.disk.readIOPS + sampled.disk.writeIOPS;
+            sampled.network.rxMBps = ((float)sampled.network.rxBytes) / (1024.0f * 1024.0f) / seconds;
+            sampled.network.txMBps = ((float)sampled.network.txBytes) / (1024.0f * 1024.0f) / seconds;
+            sampled.network.totalMBps = sampled.network.rxMBps + sampled.network.txMBps;
         } else {
             sampled.disk.readMBps = latest_metrics.disk.readMBps;
             sampled.disk.writeMBps = latest_metrics.disk.writeMBps;
             sampled.disk.totalMBps = latest_metrics.disk.totalMBps;
+            sampled.disk.readIOPS = latest_metrics.disk.readIOPS;
+            sampled.disk.writeIOPS = latest_metrics.disk.writeIOPS;
+            sampled.disk.totalIOPS = latest_metrics.disk.totalIOPS;
+            sampled.network.rxMBps = latest_metrics.network.rxMBps;
+            sampled.network.txMBps = latest_metrics.network.txMBps;
+            sampled.network.totalMBps = latest_metrics.network.totalMBps;
             sampled.cpu.busyPercent = latest_metrics.cpu.busyPercent;
             sampled.cpu.busy = latest_metrics.cpu.busy;
         }
