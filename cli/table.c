@@ -408,3 +408,60 @@ int parseJsonNetDetail(const char *json, NetDetailStatus *status) {
 
     return 0;
 }
+
+void printDebugStatus(const DebugStatus *status) {
+    const char *state_str = fetch_state_to_string(status->state);
+    
+    printf("HOST: %s\n", status->hostname);
+    printf("STATE: %s\n", state_str);
+    printf("RESP: %dms\n", status->latency_ms);
+    
+    if (status->state == FETCH_OK && status->bytes_received > 0) {
+        printf("AGE: %dms\n", status->sample_age_ms);
+        printf("BYTES: %d\n", status->bytes_received);
+        printf("TS: %llu\n", status->timestamp_ms);
+        printf("FETCH:\n");
+        printf("  connect: ok\n");
+        printf("  read: ok\n");
+    } else {
+        printf("AGE: N/A\n");
+        printf("BYTES: %d\n", status->bytes_received);
+        printf("TS: N/A\n");
+        printf("FETCH:\n");
+        
+        if (status->state == FETCH_DNS_ERROR) {
+            printf("  connect: dns_error\n");
+            printf("  read: not_attempted\n");
+        } else if (status->state == FETCH_CONNECT_ERROR) {
+            printf("  connect: failed\n");
+            printf("  read: not_attempted\n");
+        } else if (status->state == FETCH_IO_ERROR) {
+            printf("  connect: ok\n");
+            printf("  read: io_error\n");
+        } else if (status->state == FETCH_HTTP_ERROR || status->state == FETCH_PARSE_ERROR) {
+            printf("  connect: ok\n");
+            printf("  read: ok (parse_error)\n");
+        } else {
+            printf("  connect: unknown\n");
+            printf("  read: unknown\n");
+        }
+    }
+    printf("\n");
+}
+
+int parseJsonDebug(const char *json, DebugStatus *status) {
+    if (!json || !status) {
+        return -1;
+    }
+
+    const char *ptr;
+    
+    if ((ptr = strstr(json, "\"sampleTsMs\":")) != NULL) {
+        sscanf(ptr, "\"sampleTsMs\":%llu", &status->timestamp_ms);
+    }
+    if ((ptr = strstr(json, "\"sampleAgeMs\":")) != NULL) {
+        sscanf(ptr, "\"sampleAgeMs\":%d", &status->sample_age_ms);
+    }
+
+    return 0;
+}

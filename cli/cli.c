@@ -30,7 +30,8 @@ typedef enum {
     VIEW_CPU,
     VIEW_MEM,
     VIEW_DISK,
-    VIEW_NET
+    VIEW_NET,
+    VIEW_DEBUG
 } ViewMode;
 
 static const char *extract_json_body(const char *http_response) {
@@ -413,6 +414,34 @@ static void render_net_detail(Node *nodes, int nodeCount, int timeout_ms, NodeCo
     printTableFooter(ok_count, fail_count);
 }
 
+static void render_debug_detail(Node *nodes, int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode) {
+    (void)sort_mode;
+    DebugStatus statuses[MAX_NODES];
+    
+    for (int i = 0; i < nodeCount; i++) {
+        memset(&statuses[i], 0, sizeof(DebugStatus));
+        snprintf(statuses[i].hostname, sizeof(statuses[i].hostname), "%s:%d", 
+                 nodes[i].hostname, nodes[i].port);
+        
+        FetchResult result = fetchStatusWithConnection(nodes[i].hostname, nodes[i].port, timeout_ms, 
+                                                        connections ? &connections[i].sockfd : NULL);
+        statuses[i].state = result.state;
+        statuses[i].latency_ms = result.latency_ms;
+        statuses[i].bytes_received = result.bytes_received;
+        
+        if (result.state == FETCH_OK && result.bytes_received > 0) {
+            const char *json = extract_json_body(result.response);
+            if (json) {
+                parseJsonDebug(json, &statuses[i]);
+            }
+        }
+    }
+
+    for (int i = 0; i < nodeCount; i++) {
+        printDebugStatus(&statuses[i]);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     Node nodes[MAX_NODES];
@@ -448,9 +477,13 @@ int main(int argc, char *argv[])
                 view_mode = VIEW_NET;
                 continue;
             }
+            if (strcmp(argv[i], "--debug") == 0) {
+                view_mode = VIEW_DEBUG;
+                continue;
+            }
             if (strcmp(argv[i], "--sort") == 0) {
                 if (i + 1 >= argc || parse_sort_mode(argv[i + 1], &sort_mode) != 0) {
-                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
+                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
                     return 1;
                 }
                 i++;
@@ -458,7 +491,7 @@ int main(int argc, char *argv[])
             }
             if (strncmp(argv[i], "--sort=", 7) == 0) {
                 if (parse_sort_mode(argv[i] + 7, &sort_mode) != 0) {
-                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
+                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
                     return 1;
                 }
                 continue;
@@ -467,11 +500,11 @@ int main(int argc, char *argv[])
                 group_filter = argv[i];
                 continue;
             }
-            printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
+            printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
             return 1;
         }
     } else {
-        printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net] [--no-color]\n", argv[0]);
+        printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
         return 1;
     }
 
@@ -506,6 +539,9 @@ int main(int argc, char *argv[])
             case VIEW_NET:
                 render_net_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
                 break;
+            case VIEW_DEBUG:
+                render_debug_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                break;
             case VIEW_DEFAULT:
             default:
                 render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
@@ -535,6 +571,9 @@ int main(int argc, char *argv[])
                 break;
             case VIEW_NET:
                 render_net_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                break;
+            case VIEW_DEBUG:
+                render_debug_detail(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
                 break;
             case VIEW_DEFAULT:
             default:

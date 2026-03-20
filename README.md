@@ -100,6 +100,7 @@ Options:
 - `--mem`: Show detailed memory info (total, available, mem%, swap total, swap used, swap%)
 - `--disk`: Show detailed disk I/O (read/write MB/s, read/write IOPS, total IOPS)
 - `--net`: Show detailed network stats (RX/TX MB/s, total bandwidth)
+- `--debug`: Show raw diagnostic output (HOST, STATE, RESP, AGE, BYTES, TS, FETCH status)
 
 Usage examples:
 ```bash
@@ -124,8 +125,24 @@ Usage examples:
 # Monitor network bandwidth
 ./bin/cli status --net
 
+# Debug view - raw diagnostics for troubleshooting
+./bin/cli status --debug
+
 # Combine with watch mode for real-time drill-down
 ./bin/cli watch --mem
+```
+
+Debug view example output:
+```
+HOST: localhost:9002
+STATE: OK
+RESP: 2ms
+AGE: 5ms
+BYTES: 512
+TS: 1710879401123
+FETCH:
+  connect: ok
+  read: ok
 ```
 
 YAML parser scope in this version is intentionally simple:

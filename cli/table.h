@@ -59,6 +59,17 @@ typedef struct {
     float total_mbps;
 } NetDetailStatus;
 
+typedef struct {
+    char hostname[256];
+    FetchState state;
+    int latency_ms;
+    int bytes_received;
+    unsigned long long timestamp_ms;
+    int sample_age_ms;
+    int connect_ok;
+    int read_ok;
+} DebugStatus;
+
 void setTableColorEnabled(int enabled);
 void printTableHeader();
 void printTableRow(const NodeStatus *status);
@@ -80,5 +91,8 @@ int parseJsonDiskDetail(const char *json, DiskDetailStatus *status);
 void printNetDetailHeader();
 void printNetDetailRow(const NetDetailStatus *status);
 int parseJsonNetDetail(const char *json, NetDetailStatus *status);
+
+void printDebugStatus(const DebugStatus *status);
+int parseJsonDebug(const char *json, DebugStatus *status);
 
 #endif // TABLE_H
