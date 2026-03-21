@@ -95,4 +95,34 @@ int parseJsonNetDetail(const char *json, NetDetailStatus *status);
 void printDebugStatus(const DebugStatus *status);
 int parseJsonDebug(const char *json, DebugStatus *status);
 
+typedef enum {
+    FILTER_FIELD_STATE,
+    FILTER_FIELD_CPU,
+    FILTER_FIELD_MEM,
+    FILTER_FIELD_LOAD,
+    FILTER_FIELD_DISK,
+    FILTER_FIELD_RESP
+} FilterField;
+
+typedef enum {
+    FILTER_OP_EQ,     // =
+    FILTER_OP_NEQ,    // !=
+    FILTER_OP_GT,     // >
+    FILTER_OP_LT,     // <
+    FILTER_OP_GTE,    // >=
+    FILTER_OP_LTE     // <=
+} FilterOperator;
+
+typedef struct {
+    FilterField field;
+    FilterOperator op;
+    union {
+        FetchState state_val;
+        float numeric_val;
+    } value;
+} FilterExpr;
+
+int parse_filter(const char *expr, FilterExpr *filter);
+int eval_filter(const NodeStatus *status, const FilterExpr *filter);
+
 #endif // TABLE_H
