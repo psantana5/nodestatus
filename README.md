@@ -94,6 +94,7 @@ Commands:
 Options:
 - `--sort host|resp|state`: Sort nodes by hostname, response time (default: state-health)
 - `--no-color`: Disable ANSI color codes
+- `--filter <expr>`: Filter nodes by criteria (e.g., `state=OK`, `cpu>80`, `mem<50`)
 
 **Drill-Down Views** (for resource-specific troubleshooting):
 - `--cpu`: Show detailed CPU breakdown (user%, nice%, sys%, idle%, iowait%, busy%)
@@ -101,6 +102,18 @@ Options:
 - `--disk`: Show detailed disk I/O (read/write MB/s, read/write IOPS, total IOPS)
 - `--net`: Show detailed network stats (RX/TX MB/s, total bandwidth)
 - `--debug`: Show raw diagnostic output (HOST, STATE, RESP, AGE, BYTES, TS, FETCH status)
+
+**Filtering** (narrow down displayed nodes):
+- `--filter 'state=OK'` - Show only healthy nodes
+- `--filter 'state!=OK'` - Show only failed nodes
+- `--filter 'cpu>80'` - Show high CPU usage nodes
+- `--filter 'mem>90'` - Show high memory usage nodes
+- `--filter 'load>=2.0'` - Show nodes with high load average
+- `--filter 'resp<10'` - Show nodes with fast response times
+- Multiple filters use AND logic: `--filter 'state=OK' --filter 'cpu>50'`
+
+Supported filter fields: `state`, `cpu`, `mem`, `load`, `disk`, `resp`
+Supported operators: `=`, `!=`, `>`, `<`, `>=`, `<=`
 
 Usage examples:
 ```bash
@@ -128,8 +141,17 @@ Usage examples:
 # Debug view - raw diagnostics for troubleshooting
 ./bin/cli status --debug
 
-# Combine with watch mode for real-time drill-down
-./bin/cli watch --mem
+# Filter to show only healthy nodes
+./bin/cli status --filter 'state=OK'
+
+# Filter high CPU nodes and sort by CPU
+./bin/cli status --filter 'cpu>80' --sort cpu
+
+# Combine filtering with drill-down views
+./bin/cli status --cpu --filter 'state=OK' --filter 'cpu>50'
+
+# Watch mode with filters for real-time monitoring
+./bin/cli watch --filter 'state!=OK'
 ```
 
 Debug view example output:
@@ -153,20 +175,74 @@ YAML parser scope in this version is intentionally simple:
 
 ---
 
-## Metrics (v1)
-The metrics that will be gathered in the first version will be:
-- Load Average
-- CPU Usage
-- Memory Usage
-- I/O wait
+## Metrics (current version)
+The agent collects comprehensive system metrics:
 
-Interfaces used for this metrics will be:
+**CPU Metrics:**
+- User%, Nice%, System%, Idle%, I/O Wait%, Busy%
+- Derived from `/proc/stat`
 
-`/proc/stat`, `/proc/meminfo`, `/proc/loadavg` and `/proc/diskstats`
+**Memory Metrics:**
+- Total, Free, Available, Used (MB and %)
+- Swap Total, Free, Used (MB and %)
+- Derived from `/proc/meminfo`
 
-## API (v1)
+**Load Average:**
+- 1-minute, 5-minute, 15-minute averages
+- Derived from `/proc/loadavg`
 
-The endpoint used for metrics will be `/status` and it will return a JSON string that contains all the metrics.
+**Disk I/O:**
+- Read/Write throughput (MB/s)
+- Read/Write IOPS
+- Total IOPS
+- Derived from `/proc/diskstats`
+
+**Network:**
+- RX/TX throughput (MB/s)
+- Total bandwidth
+- Derived from `/sys/class/net/*/statistics/`
+
+## API (current version)
+
+**Endpoint:** `GET /status`
+
+**Response format:** JSON with all metrics
+
+Example response:
+```json
+{
+  "sampleTsMs": 512382,
+  "sampleAgeMs": 9,
+  "load1": 0.79,
+  "load5": 0.71,
+  "load15": 0.43,
+  "memTotal": 15810400,
+  "memFree": 7733048,
+  "memAvailable": 11085736,
+  "memUsed": 4724664,
+  "memUsedPercent": 29.88,
+  "swapTotal": 4456440,
+  "swapFree": 4456440,
+  "swapUsed": 0,
+  "swapUsedPercent": 0.00,
+  "cpuUser": 29537,
+  "cpuNice": 2083,
+  "cpuSystem": 11118,
+  "cpuIdle": 668027,
+  "cpuIOwait": 1403,
+  "cpuBusy": 105,
+  "cpuBusyPercent": 2.76,
+  "diskReadMBps": 0.00,
+  "diskWriteMBps": 0.00,
+  "diskTotalMBps": 0.00,
+  "diskReadIOPS": 0.00,
+  "diskWriteIOPS": 0.00,
+  "diskTotalIOPS": 0.00,
+  "netRxMBps": 0.02,
+  "netTxMBps": 0.02,
+  "netTotalMBps": 0.04
+}
+```
 
 ---
 
