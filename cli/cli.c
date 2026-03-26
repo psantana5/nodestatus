@@ -536,7 +536,7 @@ int main(int argc, char *argv[])
             }
             if (strcmp(argv[i], "--sort") == 0) {
                 if (i + 1 >= argc || parse_sort_mode(argv[i + 1], &sort_mode) != 0) {
-                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
+                    printf("Usage: %s [status|watch] [group] [--filter <expr>] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
                     return 1;
                 }
                 i++;
@@ -544,7 +544,7 @@ int main(int argc, char *argv[])
             }
             if (strncmp(argv[i], "--sort=", 7) == 0) {
                 if (parse_sort_mode(argv[i] + 7, &sort_mode) != 0) {
-                    printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
+                    printf("Usage: %s [status|watch] [group] [--filter <expr>] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
                     return 1;
                 }
                 continue;
@@ -553,11 +553,11 @@ int main(int argc, char *argv[])
                 group_filter = argv[i];
                 continue;
             }
-            printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
+            printf("Usage: %s [status|watch] [group] [--filter <expr>] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
             return 1;
         }
     } else {
-        printf("Usage: %s [status|watch] [group] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
+        printf("Usage: %s [status|watch] [group] [--filter <expr>] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
         return 1;
     }
 

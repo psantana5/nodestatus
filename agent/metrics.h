@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// We will define a struct to hold the load average metrics, including the 1-minute, 5-minute, and 15-minute load averages
+// LoadMetrics struct holds load average metrics: 1-minute, 5-minute, and 15-minute load averages
 typedef struct {
     float load1;
     float load5;
@@ -12,7 +12,7 @@ typedef struct {
 
 LoadMetrics getLoadAverage();
 
-// We will define a new struct to hold memory metrics, including total, free, available memory, used memory, and used memory percentage
+// MemoryMetrics struct holds memory statistics: total, free, available memory, and usage percentages for both RAM and swap
 typedef struct {
     unsigned long MemTotal;
     unsigned long MemFree;
@@ -27,7 +27,7 @@ typedef struct {
 
 MemoryMetrics getMemoryMetrics();
 
-// We will define a new struct to hold CPU usage metrics, including total, idle and I/O wait times.
+// CpuMetrics struct holds CPU usage data including idle, I/O wait times, and calculated busy metrics with percentage
 typedef struct {
     unsigned long long user;
     unsigned long long nice;

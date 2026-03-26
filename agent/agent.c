@@ -17,7 +17,7 @@
 
 // Simple HTTP server to handle requests and return system metrics
 // Listens on port 9002 and responds to /status with JSON metrics
-// For simplicity, this server handles one request at a time and does not implement concurrency
+// Supports HTTP keep-alive connections with queued connection backlog
 
 static void print_usage(const char *progname) {
     printf("Usage: %s [-p port|--port port|--port=port]\n", progname);
