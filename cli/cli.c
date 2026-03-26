@@ -34,6 +34,29 @@ typedef enum {
     VIEW_DEBUG
 } ViewMode;
 
+#define MAX_FILTERS 16
+
+static int apply_filters(NodeStatus *statuses, int count, FilterExpr *filters, int filter_count, NodeStatus *output) {
+    int output_count = 0;
+    
+    for (int i = 0; i < count; i++) {
+        int matches_all = 1;
+        
+        for (int f = 0; f < filter_count; f++) {
+            if (!eval_filter(&statuses[i], &filters[f])) {
+                matches_all = 0;
+                break;
+            }
+        }
+        
+        if (matches_all) {
+            output[output_count++] = statuses[i];
+        }
+    }
+    
+    return output_count;
+}
+
 static const char *extract_json_body(const char *http_response) {
     const char *body = strstr(http_response, "\r\n\r\n");
     if (!body) {
@@ -216,8 +239,9 @@ static void sort_statuses(NodeStatus statuses[], int count, SortMode sort_mode) 
     }
 }
 
-static void render_status_table(const Node nodes[], int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode) {
+static void render_status_table(const Node nodes[], int nodeCount, int timeout_ms, NodeConnection *connections, SortMode sort_mode, FilterExpr *filters, int filter_count) {
     NodeStatus statuses[MAX_NODES];
+    NodeStatus filtered[MAX_NODES];
     QueryTask tasks[MAX_NODES];
     pthread_t threads[MAX_NODES];
     int thread_started[MAX_NODES];
@@ -247,21 +271,29 @@ static void render_status_table(const Node nodes[], int nodeCount, int timeout_m
         }
     }
 
+    int display_count = nodeCount;
+    NodeStatus *display_statuses = statuses;
+    
+    if (filter_count > 0) {
+        display_count = apply_filters(statuses, nodeCount, filters, filter_count, filtered);
+        display_statuses = filtered;
+    }
+
     int ok_count = 0;
     int fail_count = 0;
-    for (int i = 0; i < nodeCount; i++) {
-        if (statuses[i].has_metrics) {
+    for (int i = 0; i < display_count; i++) {
+        if (display_statuses[i].has_metrics) {
             ok_count++;
         } else {
             fail_count++;
         }
     }
 
-    sort_statuses(statuses, nodeCount, sort_mode);
+    sort_statuses(display_statuses, display_count, sort_mode);
 
     printTableHeader();
-    for (int i = 0; i < nodeCount; i++) {
-        printTableRow(&statuses[i]);
+    for (int i = 0; i < display_count; i++) {
+        printTableRow(&display_statuses[i]);
     }
     printTableFooter(ok_count, fail_count);
 }
@@ -451,6 +483,8 @@ int main(int argc, char *argv[])
     SortMode sort_mode = SORT_BY_STATE;
     ViewMode view_mode = VIEW_DEFAULT;
     int colors_enabled = 1;
+    FilterExpr filters[MAX_FILTERS];
+    int filter_count = 0;
 
     if (argc == 1) {
         /* default: one-shot status for all nodes */
@@ -479,6 +513,25 @@ int main(int argc, char *argv[])
             }
             if (strcmp(argv[i], "--debug") == 0) {
                 view_mode = VIEW_DEBUG;
+                continue;
+            }
+            if (strcmp(argv[i], "--filter") == 0) {
+                if (i + 1 >= argc) {
+                    printf("Error: --filter requires an expression\n");
+                    printf("Usage: %s [status|watch] [group] [--filter <expr>] [--sort host|resp|state] [--cpu|--mem|--disk|--net|--debug] [--no-color]\n", argv[0]);
+                    return 1;
+                }
+                if (filter_count >= MAX_FILTERS) {
+                    printf("Error: Maximum %d filters allowed\n", MAX_FILTERS);
+                    return 1;
+                }
+                if (parse_filter(argv[i + 1], &filters[filter_count]) != 0) {
+                    printf("Error: Invalid filter expression: %s\n", argv[i + 1]);
+                    printf("Valid formats: state=OK, cpu>80, mem<=90, load>=2.0, disk>100, resp<50\n");
+                    return 1;
+                }
+                filter_count++;
+                i++;
                 continue;
             }
             if (strcmp(argv[i], "--sort") == 0) {
@@ -544,7 +597,7 @@ int main(int argc, char *argv[])
                 break;
             case VIEW_DEFAULT:
             default:
-                render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode);
+                render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, NULL, sort_mode, filters, filter_count);
                 break;
         }
         return 0;
@@ -577,7 +630,7 @@ int main(int argc, char *argv[])
                 break;
             case VIEW_DEFAULT:
             default:
-                render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode);
+                render_status_table(nodes, nodeCount, NODE_CONNECT_TIMEOUT_MS, connections, sort_mode, filters, filter_count);
                 break;
         }
 

@@ -465,3 +465,152 @@ int parseJsonDebug(const char *json, DebugStatus *status) {
 
     return 0;
 }
+
+int parse_filter(const char *expr, FilterExpr *filter) {
+    if (!expr || !filter) {
+        return -1;
+    }
+
+    char field_str[32];
+    char op_str[3];
+    char value_str[32];
+    int pos = 0;
+    int i = 0;
+
+    while (expr[pos] && expr[pos] != '=' && expr[pos] != '!' && 
+           expr[pos] != '>' && expr[pos] != '<' && i < 31) {
+        field_str[i++] = expr[pos++];
+    }
+    field_str[i] = '\0';
+
+    i = 0;
+    while (expr[pos] && (expr[pos] == '=' || expr[pos] == '!' || 
+                          expr[pos] == '>' || expr[pos] == '<') && i < 2) {
+        op_str[i++] = expr[pos++];
+    }
+    op_str[i] = '\0';
+
+    i = 0;
+    while (expr[pos] && i < 31) {
+        value_str[i++] = expr[pos++];
+    }
+    value_str[i] = '\0';
+
+    if (strcmp(field_str, "state") == 0) {
+        filter->field = FILTER_FIELD_STATE;
+    } else if (strcmp(field_str, "cpu") == 0) {
+        filter->field = FILTER_FIELD_CPU;
+    } else if (strcmp(field_str, "mem") == 0) {
+        filter->field = FILTER_FIELD_MEM;
+    } else if (strcmp(field_str, "load") == 0) {
+        filter->field = FILTER_FIELD_LOAD;
+    } else if (strcmp(field_str, "disk") == 0) {
+        filter->field = FILTER_FIELD_DISK;
+    } else if (strcmp(field_str, "resp") == 0) {
+        filter->field = FILTER_FIELD_RESP;
+    } else {
+        return -1;
+    }
+
+    if (strcmp(op_str, "=") == 0 || strcmp(op_str, "==") == 0) {
+        filter->op = FILTER_OP_EQ;
+    } else if (strcmp(op_str, "!=") == 0) {
+        filter->op = FILTER_OP_NEQ;
+    } else if (strcmp(op_str, ">") == 0) {
+        filter->op = FILTER_OP_GT;
+    } else if (strcmp(op_str, "<") == 0) {
+        filter->op = FILTER_OP_LT;
+    } else if (strcmp(op_str, ">=") == 0) {
+        filter->op = FILTER_OP_GTE;
+    } else if (strcmp(op_str, "<=") == 0) {
+        filter->op = FILTER_OP_LTE;
+    } else {
+        return -1;
+    }
+
+    if (filter->field == FILTER_FIELD_STATE) {
+        if (strcmp(value_str, "OK") == 0) {
+            filter->value.state_val = FETCH_OK;
+        } else if (strcmp(value_str, "CONNECT_ERR") == 0) {
+            filter->value.state_val = FETCH_CONNECT_ERROR;
+        } else if (strcmp(value_str, "DNS_ERR") == 0) {
+            filter->value.state_val = FETCH_DNS_ERROR;
+        } else if (strcmp(value_str, "HTTP_ERR") == 0) {
+            filter->value.state_val = FETCH_HTTP_ERROR;
+        } else if (strcmp(value_str, "PARSE_ERR") == 0) {
+            filter->value.state_val = FETCH_PARSE_ERROR;
+        } else if (strcmp(value_str, "IO_ERR") == 0) {
+            filter->value.state_val = FETCH_IO_ERROR;
+        } else {
+            return -1;
+        }
+    } else {
+        if (sscanf(value_str, "%f", &filter->value.numeric_val) != 1) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int eval_filter(const NodeStatus *status, const FilterExpr *filter) {
+    if (!status || !filter) {
+        return 0;
+    }
+
+    float node_value = 0.0f;
+    
+    switch (filter->field) {
+        case FILTER_FIELD_STATE:
+            switch (filter->op) {
+                case FILTER_OP_EQ:
+                    return status->state == filter->value.state_val ? 1 : 0;
+                case FILTER_OP_NEQ:
+                    return status->state != filter->value.state_val ? 1 : 0;
+                default:
+                    return 0;
+            }
+            
+        case FILTER_FIELD_CPU:
+            node_value = status->cpu_percent;
+            break;
+            
+        case FILTER_FIELD_MEM:
+            node_value = status->mem_percent;
+            break;
+            
+        case FILTER_FIELD_LOAD:
+            node_value = status->load;
+            break;
+            
+        case FILTER_FIELD_DISK:
+            node_value = status->disk_mb_s;
+            break;
+            
+        case FILTER_FIELD_RESP:
+            node_value = (float)status->latency_ms;
+            break;
+            
+        default:
+            return 0;
+    }
+
+    switch (filter->op) {
+        case FILTER_OP_EQ:
+            return (node_value >= filter->value.numeric_val - 0.01f && 
+                    node_value <= filter->value.numeric_val + 0.01f) ? 1 : 0;
+        case FILTER_OP_NEQ:
+            return (node_value < filter->value.numeric_val - 0.01f || 
+                    node_value > filter->value.numeric_val + 0.01f) ? 1 : 0;
+        case FILTER_OP_GT:
+            return node_value > filter->value.numeric_val ? 1 : 0;
+        case FILTER_OP_LT:
+            return node_value < filter->value.numeric_val ? 1 : 0;
+        case FILTER_OP_GTE:
+            return node_value >= filter->value.numeric_val ? 1 : 0;
+        case FILTER_OP_LTE:
+            return node_value <= filter->value.numeric_val ? 1 : 0;
+        default:
+            return 0;
+    }
+}
